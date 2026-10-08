@@ -1,0 +1,95 @@
+' Mismas relaciones que casos-de-uso.png.
+' No regenerar el PNG desde este archivo: PlantUML cruza las flechas.
+' La figura que se entrega la produce render_casos_de_uso.py.
+@startuml casos-de-uso
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam linetype ortho
+skinparam roundcorner 8
+skinparam defaultFontName Arial
+skinparam dpi 140
+
+skinparam actor {
+  FontSize 13
+  FontColor #1A1A1A
+}
+
+skinparam usecase {
+  BackgroundColor #D6EAF8
+  BorderColor #1A5276
+  FontSize 12
+  FontColor #1A1A1A
+}
+
+skinparam rectangle {
+  BorderColor #1A365D
+  FontSize 14
+  FontStyle bold
+}
+
+left to right direction
+
+actor "Empleado" as Emp
+actor "Empleado\nno pensionado" as ENP
+actor "Empleado\npensionado" as EP
+actor "Encargado del\nrestaurante" as Enc
+actor "Base de empleados\nde la institución" as BD
+
+ENP -up-|> Emp
+EP -up-|> Emp
+
+rectangle "Sistema de Reservas y Pensionamiento de Almuerzos\nRestaurante de la Unión Boliviana" {
+  usecase "Ingresar al sistema\n(UC01 · HU01)" as UC01
+  usecase "Reservar almuerzo\n(UC02 · HU02)" as UC02
+  usecase "Cancelar reserva\n(UC03 · HU03)" as UC03
+  usecase "Ver almuerzos\nconfirmados del día\n(UC04 · HU04)" as UC04
+  usecase "Registrar feriados\ndel mes\n(UC05 · HU05)" as UC05
+  usecase "Solicitar\npensionamiento\n(UC06 · HU06)" as UC06
+  usecase "Avisar inasistencia\n(UC07 · HU07)" as UC07
+  usecase "Generar reporte\nmensual\n(UC08 · HU08)" as UC08
+  usecase "Ver mi consumo\ndel mes\n(UC09 · HU09)" as UC09
+
+  usecase "Validar empleado\nen base de datos" as I1 #EDE4F5
+  usecase "Verificar día de servicio\n(L–J, no feriado)" as I2 #EDE4F5
+  usecase "Validar hora límite\n(antes de las 9:00)" as I3 #EDE4F5
+  usecase "Bloquear reservas\ny confirmaciones" as I4 #EDE4F5
+  usecase "Registrar almuerzos\ndel mes (L–J, sin feriados)" as I5 #EDE4F5
+  usecase "Validar mínimo\nde 10 almuerzos" as I6 #EDE4F5
+  usecase "Calcular montos\n(15 Bs / 18 Bs)" as I7 #EDE4F5
+  usecase "Exportar a Excel" as X1 #E3F6E8
+  usecase "Exportar a PDF" as X2 #E3F6E8
+
+  UC01 .> I1 : <<include>>
+  UC02 .> I2 : <<include>>
+  UC02 .> I3 : <<include>>
+  UC03 .> I3 : <<include>>
+  UC05 .> I4 : <<include>>
+  UC06 .> I5 : <<include>>
+  UC07 .> I3 : <<include>>
+  UC07 .> I6 : <<include>>
+  UC08 .> I7 : <<include>>
+  X1 .> UC08 : <<extend>>\ncondición: elige Excel
+  X2 .> UC08 : <<extend>>\ncondición: elige PDF
+}
+
+Emp --> UC01
+Emp --> UC06
+Emp --> UC09
+ENP --> UC02
+ENP --> UC03
+EP --> UC07
+Enc --> UC01
+Enc --> UC04
+Enc --> UC05
+Enc --> UC08
+I1 -- BD
+
+legend
+  Azul: objetivo de un actor, trazable a una historia.
+  Violeta: <<include>>. Se ejecuta siempre.
+  Verde: <<extend>>. Solo si el encargado elige ese formato.
+  El rechazo por hora, por feriado o por el mínimo de 10
+  es flujo alternativo, no un <<extend>>.
+  La base de empleados no inicia casos de uso.
+endlegend
+@enduml

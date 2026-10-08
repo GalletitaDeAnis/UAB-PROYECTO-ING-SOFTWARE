@@ -1,0 +1,33 @@
+@startuml arquitectura
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam dpi 150
+skinparam roundcorner 10
+skinparam ArrowColor #1A365D
+skinparam ArrowThickness 1.4
+skinparam rectangle {
+  FontSize 15
+  BorderColor #1A365D
+}
+
+title Capas del sistema de almuerzos\nLa flecha es dependencia: quién conoce a quién
+
+rectangle "Presentación\nPantalla del empleado: ingresar, reservar, cancelar,\npensionarse, avisar inasistencia, ver consumo\nPantalla del encargado: lista del día, feriados, reporte" as P #EAF3FB
+
+rectangle "Aplicación\nUn caso de uso por historia (HU01 a HU09)\nOrdena los pasos. No decide las reglas." as A #EAF6EA
+
+rectangle "Dominio\nEntidades: Empleado, Pension, Almuerzo, Feriado\nReglas R1 a R8: hora límite, día de servicio, mínimo de 10, tarifas 15 y 18\nPuertos: repositorios, directorio de empleados, reloj, exportador" as D #FFF8E8
+
+rectangle "Infraestructura\nSQLite · directorio de empleados simulado · reloj America/La_Paz\nExportador Excel · exportador PDF\nComposición: único lugar que crea las clases concretas" as I #F6EEF8
+
+P -down-> A : llama a los casos de uso
+A -down-> D : usa entidades, reglas y puertos
+I -up-> D : implementa los puertos\n(el dominio no la conoce)
+
+note bottom of D
+  DIP: la política no depende del detalle.
+  No hay repositorio para la tarifa ni para la línea de descuento.
+  El reporte se calcula; no se guarda.
+end note
+@enduml
