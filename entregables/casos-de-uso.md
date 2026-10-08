@@ -2,9 +2,9 @@
 
 Cada caso de uso de este documento es el objetivo de un actor y corresponde a una historia del [backlog](backlog.md). Los óvalos pequeños del diagrama no son historias: son comportamiento que siempre ocurre (`include`) o que solo ocurre si el actor elige un formato (`extend`).
 
-![Diagrama de casos de uso](../diagrams/casos-de-uso.png)
+![Diagrama de casos de uso](diagrams/casos-de-uso.png)
 
-Fuente: [diagrams/casos-de-uso.puml](../diagrams/casos-de-uso.puml). La figura que se entrega es el PNG: PlantUML cruza las flechas y el `extend` parece llegar a otro caso.
+Fuente: [diagrams/casos-de-uso.puml](diagrams/casos-de-uso.puml). La figura que se entrega es el PNG: PlantUML cruza las flechas y el `extend` parece llegar a otro caso.
 
 ## Qué se corrigió del diagrama anterior
 

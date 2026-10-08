@@ -2,9 +2,9 @@
 
 El sistema es un solo producto, con cuatro capas. No hace falta partirlo en servicios separados: hay un restaurante, una institución y menos de treinta puntos de historia. Un monolito con las dependencias en orden se puede explicar en la defensa y se puede probar con dobles de prueba. Microservicios, colas o un API de planilla no aportan a las nueve historias y sí mezclarían el trabajo de los sprints.
 
-![Capas y dirección de las dependencias](../diagrams/arquitectura.png)
+![Capas y dirección de las dependencias](diagrams/arquitectura.png)
 
-Fuente editable: [diagrams/arquitectura.puml](../diagrams/arquitectura.puml).
+Fuente editable: [diagrams/arquitectura.puml](diagrams/arquitectura.puml).
 
 ## Capas
 
@@ -117,9 +117,9 @@ Ejemplo con reservar, que es el que más reglas junta en el Sprint 1:
 
 Pensionarse recorre el mismo camino: la aplicación pide los feriados del mes, el dominio calcula los días de servicio y rechaza si son menos de 10, y los repositorios guardan la pensión y los almuerzos. La pantalla no recorre el calendario.
 
-## Estructura prevista del código
+## Estructura del código
 
-Cuando empiece el incremento del Sprint 1, el código se separa así. Todavía no está creado: esta entrega es la decisión, no el producto.
+El incremento del Sprint 1 ya está separado así. El dominio no importa Prisma ni Express.
 
 ```text
 src/presentacion
@@ -131,19 +131,17 @@ tests
 
 Una prueba de HU02 no levanta el servidor web ni abre un archivo Excel. Arma `ReservarAlmuerzo` con repositorios en memoria y un reloj en 8:30, ejecuta, y mira el almuerzo guardado. Otra prueba pone el reloj en las 9:00 y comprueba que no se guardó nada. Esos dos casos salen directo de los criterios 1 y 2 de HU02.
 
-## Stack propuesto
+## Stack
 
-La rúbrica evalúa la práctica, no la herramienta. La propuesta para implementar es:
+La rúbrica evalúa la práctica, no la herramienta. El equipo usa Node.js con TypeScript y Prisma, que es el entorno con el que se puede explicar el proyecto en la defensa. Las cuatro capas no cambian si más adelante se cambia de lenguaje.
 
 | Pieza | Elección | Motivo |
 | --- | --- | --- |
-| Lenguaje | Python 3 | El equipo puede leerlo en la defensa y las pruebas salen cortas. |
-| Interfaz y API | FastAPI, con páginas simples | Alcanza para el demo del empleado y del encargado. |
-| Persistencia | SQLite | Un archivo, sin instalar un servidor de base para el Demo Day. |
-| Pruebas | pytest | Casos normales, inválidos y de borde, con dobles en memoria. |
-| Excel y PDF | openpyxl y una librería de PDF | Dos implementaciones del mismo puerto. |
-
-Si el equipo prefiere otro lenguaje, se cambian las herramientas y se mantienen las cuatro capas, los puertos y la regla de que el dominio no importa la base. Esa sustitución no reabre las historias.
+| Lenguaje | TypeScript sobre Node.js | El dominio y los casos de uso se leen junto al diagrama de clases. |
+| Interfaz | Express, páginas HTML del propio sistema | La pantalla llama casos de uso. No hay un framework que esconda la composición. |
+| Persistencia | Prisma con SQLite | Un archivo `prisma/dev.db`. El Demo Day no necesita un servidor de base aparte. Prisma es el detalle: el dominio no lo importa. |
+| Pruebas | Vitest, con reloj y repositorios en memoria | Los criterios de HU01 a HU04 no abren la base ni el servidor. |
+| Excel y PDF | Quedan para HU08 | Dos implementaciones del puerto de exportación. Todavía no se escriben: el Sprint 1 no genera el reporte. |
 
 ## Qué tiene que poder explicar cada integrante
 

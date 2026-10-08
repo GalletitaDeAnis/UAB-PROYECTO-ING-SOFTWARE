@@ -10,23 +10,45 @@ Entra: ingreso con la base de empleados que ya existe, reserva esporádica (18 B
 
 No entra: alta de empleados, pagos en línea, menú del día, notificaciones push ni conexión directa con el sistema de planilla. El encargado entrega el archivo.
 
-## Evidencia para la rúbrica
+## Entregables
 
-| Entrega | Dónde está |
+Todo lo que se sube a Classroom está en [`entregables/`](entregables/).
+
+| Qué | Dónde |
 | --- | --- |
-| Backlog, historias INVEST, criterios y estimación | [docs/backlog.md](docs/backlog.md) |
-| Casos de uso y diagrama | [docs/casos-de-uso.md](docs/casos-de-uso.md) |
-| Diagrama de clases | [docs/diagrama-de-clases.md](docs/diagrama-de-clases.md) |
-| Capas, DIP, Repository y DI | [docs/arquitectura.md](docs/arquitectura.md) |
-| Cómo se integra el trabajo del equipo | [docs/flujo-de-trabajo-git.md](docs/flujo-de-trabajo-git.md) |
-| Uso de IA | [docs/declaracion-uso-de-ia.md](docs/declaracion-uso-de-ia.md) |
+| Backlog | [entregables/backlog.md](entregables/backlog.md) |
+| Casos de uso | [entregables/casos-de-uso.md](entregables/casos-de-uso.md) |
+| Diagrama de clases | [entregables/diagrama-de-clases.md](entregables/diagrama-de-clases.md) |
+| Arquitectura | [entregables/arquitectura.md](entregables/arquitectura.md) |
+| Sprint 1, cómo demostrarlo | [entregables/sprint-1.md](entregables/sprint-1.md) |
+| Definition of Done | [entregables/definition-of-done.md](entregables/definition-of-done.md) |
 
-Los diagramas fuente están en [`diagrams/`](diagrams/) (PlantUML). Las imágenes PNG y SVG salen de esos archivos.
+## Correr el incremento del Sprint 1
 
-## Rama de trabajo
+Hace falta Node.js. En la carpeta del proyecto:
 
-`main` es la rama central y solo recibe trabajo ya revisado. El equipo integra en `desarrollo`. El detalle está en [docs/flujo-de-trabajo-git.md](docs/flujo-de-trabajo-git.md).
+```bash
+npm install
+npm run preparar
+npm test
+npm run dev
+```
 
-## Todavía no está en este corte
+Abrir http://localhost:3000
 
-Para cerrar el Sprint 1, además de estos documentos, hacen falta el primer incremento funcional (HU01–HU04) con pruebas por criterio y el acta de la Retro 1. El producto se construye en el siguiente corte, sobre las decisiones de [docs/arquitectura.md](docs/arquitectura.md).
+Si ese puerto ya está ocupado, usa otro: `$env:PORT=3010; npm run dev` y abre http://localhost:3010.
+
+| Identificador | Quién | Qué puede hacer ahora |
+| --- | --- | --- |
+| UB-100 | Ana Rojas | Reservar y cancelar |
+| UB-101 | Carlos Mamani | Reservar y cancelar |
+| UB-102 | Laura Quispe | No ingresa: está inactiva |
+| UB-200 | Elena Vargas | Lo de una empleada, más la lista del día |
+
+Si ya pasaron las 9:00, el día de hoy no se puede reservar. La pantalla ofrece el siguiente lunes a jueves. Para ensayar el límite sin esperar al reloj: `RELOJ_FIJO=2026-10-07T08:30 npm run dev`.
+
+El Sprint 1 cubre ingresar, reservar, cancelar y la lista del día. Pensionarse, feriados, inasistencias, reporte y consumo quedan para los sprints 2 y 3. Las reglas ya están en el dominio cuando hacen falta para no aceptar una reserva inválida (feriado o pensionado).
+
+## Ramas
+
+`main` es la rama central. El equipo integra en `desarrollo`. Este incremento está en `feature/sprint-1-incremento`. El acuerdo está en [entregables/flujo-de-trabajo-git.md](entregables/flujo-de-trabajo-git.md).

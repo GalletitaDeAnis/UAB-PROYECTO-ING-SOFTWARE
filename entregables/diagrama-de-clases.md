@@ -2,9 +2,9 @@
 
 El diagrama muestra las entidades que el sistema guarda, sus atributos y las relaciones que salen de las reglas. No es el modelo de pantallas ni el de tablas con cada índice: eso se precisa al implementar, sin cambiar estas multiplicidades.
 
-![Diagrama de clases](../diagrams/clases.png)
+![Diagrama de clases](diagrams/clases.png)
 
-Fuente editable: [diagrams/clases.puml](../diagrams/clases.puml).
+Fuente editable: [diagrams/clases.puml](diagrams/clases.puml).
 
 ## Entidades
 
