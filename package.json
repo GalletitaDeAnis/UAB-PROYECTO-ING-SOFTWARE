@@ -1,0 +1,25 @@
+{
+  "name": "almuerzos-union-boliviana",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preparar": "prisma generate && prisma db push && tsx prisma/seed.ts",
+    "dev": "tsx src/infraestructura/servidor.ts",
+    "test": "vitest run"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.16.2",
+    "express": "4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.21",
+    "@types/node": "24.5.2",
+    "prisma": "6.16.2",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Empleado {
+  codigoInstitucional String         @id
+  nombreCompleto      String
+  activo              Boolean
+  autorizacion        Autorizacion?
+  almuerzos           Almuerzo[]
+  pensiones           Pension[]
+}
+
+model Autorizacion {
+  codigoEmpleado String   @id
+  rol            String
+  empleado       Empleado @relation(fields: [codigoEmpleado], references: [codigoInstitucional])
+}
+
+model Almuerzo {
+  codigoEmpleado String
+  fecha          String
+  origen         String
+  precioBs       Int
+  estado         String
+  empleado       Empleado @relation(fields: [codigoEmpleado], references: [codigoInstitucional])
+
+  @@id([codigoEmpleado, fecha])
+}
+
+model Feriado {
+  fecha       String @id
+  descripcion String
+}
+
+model Pension {
+  codigoEmpleado String
+  anio           Int
+  mes            Int
+  fechaSolicitud String
+  empleado       Empleado @relation(fields: [codigoEmpleado], references: [codigoInstitucional])
+
+  @@id([codigoEmpleado, anio, mes])
+}
