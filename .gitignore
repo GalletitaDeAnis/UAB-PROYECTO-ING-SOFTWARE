@@ -1,0 +1,7 @@
+_extract/
+__pycache__/
+*.jar
+.venv/
+.env
+.idea/
+.vscode/
