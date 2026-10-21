@@ -3,20 +3,31 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "preparar": "prisma generate && prisma db push && tsx prisma/seed.ts",
-    "dev": "tsx src/infraestructura/servidor.ts",
-    "test": "vitest run"
+    "preparar": "prisma generate && prisma migrate deploy && tsx --env-file=.env prisma/seed.ts",
+    "db:migrar": "prisma migrate dev",
+    "db:estudio": "prisma studio",
+    "dev": "tsx --env-file=.env src/infraestructura/servidor.ts",
+    "simulador": "tsx --env-file=.env simulador-empresarial/servidor.ts",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "test:cobertura": "vitest run --coverage"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "6.16.2",
-    "express": "4.21.2"
+    "exceljs": "4.4.0",
+    "express": "4.21.2",
+    "graphql": "16.14.2",
+    "graphql-yoga": "5.24.6",
+    "pdfkit": "0.17.2"
   },
   "devDependencies": {
     "@types/express": "4.17.21",
     "@types/node": "24.5.2",
+    "@types/pdfkit": "0.17.6",
+    "@vitest/coverage-v8": "3.2.4",
     "prisma": "6.16.2",
     "tsx": "4.20.5",
     "typescript": "5.9.2",

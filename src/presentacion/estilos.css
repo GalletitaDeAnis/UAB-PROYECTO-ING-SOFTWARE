@@ -44,7 +44,7 @@ h1, h2 { margin: 0 0 8px; }
 
 label { display: block; font-weight: 600; margin: 12px 0 6px; }
 
-input[type="text"], input[type="date"] {
+input[type="text"], input[type="password"], input[type="date"], select {
   width: 100%;
   max-width: 280px;
   padding: 10px 12px;
