@@ -1,7 +1,7 @@
-"""Dibuja el diagrama de casos de uso con posiciones fijas.
+"""Dibuja el diagrama de casos de uso (backlog v2) con posiciones fijas.
 
 PlantUML deja las flechas cruzadas y el extend parece llegar al caso equivocado.
-Este archivo es la fuente del PNG y del SVG que se entregan.
+Este archivo es la fuente del PNG que se entrega. Ejecutar: python render_casos_de_uso.py
 """
 
 from pathlib import Path
@@ -12,7 +12,7 @@ OUT = Path(__file__).resolve().parent
 FONT = Path(r"C:\Windows\Fonts\segoeui.ttf")
 FONTB = Path(r"C:\Windows\Fonts\segoeuib.ttf")
 
-W, H = 1680, 1860
+W, H = 1700, 2100
 
 
 def font(size, bold=False):
@@ -119,169 +119,130 @@ def main():
     purple = "#6C3483"
     green = "#0E6655"
 
-    draw_center_lines(
-        draw,
-        W / 2,
-        36,
-        ["Sistema de Reservas y Pensionamiento de Almuerzos"],
-        font(22, bold=True),
-        ink,
-    )
-    draw_center_lines(
-        draw,
-        W / 2,
-        64,
-        ["Restaurante de la Unión Boliviana"],
-        font(15),
-        "#34495E",
-    )
+    draw_center_lines(draw, W / 2, 36, ["Sistema de Reservas y Pensionamiento de Almuerzos"], font(22, bold=True), ink)
+    draw_center_lines(draw, W / 2, 64, ["Restaurante de la Unión Boliviana · casos de uso del backlog v2"], font(15), "#34495E")
 
-    # System boundary
-    sys = (390, 100, 1320, 1688)
+    sys = (420, 100, 1330, 1940)
     draw.rounded_rectangle(sys, radius=8, outline="#1A365D", width=3)
-    draw.text((408, 112), "Sistema", font=font(14, bold=True), fill="#1A365D")
+    draw.text((438, 112), "Sistema de reservas", font=font(14, bold=True), fill="#1A365D")
 
-    # Primary use cases, top to bottom, grouped by actor.
+    # Casos de uso del actor, agrupados por el include que comparten.
     P = {
-        "UC01": (640, 190, ["Ingresar al sistema", "UC01 · HU01"]),
-        "UC06": (640, 340, ["Solicitar pensionamiento", "UC06 · HU06"]),
-        "UC09": (640, 490, ["Ver mi consumo del mes", "UC09 · HU09"]),
-        "UC02": (640, 660, ["Reservar almuerzo", "UC02 · HU02"]),
-        "UC03": (640, 810, ["Cancelar reserva", "UC03 · HU03"]),
-        "UC07": (640, 960, ["Avisar inasistencia", "UC07 · HU07"]),
-        "UC04": (640, 1130, ["Ver almuerzos confirmados", "del día", "UC04 · HU04"]),
-        "UC05": (640, 1290, ["Registrar feriados del mes", "UC05 · HU05"]),
-        "UC08": (640, 1480, ["Generar reporte mensual", "UC08 · HU08"]),
+        "CU01": (640, 190, ["Iniciar sesión", "CU01 · HU01"]),
+        "CU05": (640, 330, ["Consultar familiares", "CU05 · HU05"]),
+        "CU08": (640, 470, ["Pensionarse", "CU08 · HU08"]),
+        "CU09": (640, 610, ["Pensionar a un familiar", "CU09 · HU09"]),
+        "CU02": (640, 760, ["Reservar almuerzo propio", "CU02 · HU02"]),
+        "CU03": (640, 900, ["Cancelar reserva propia", "CU03 · HU03"]),
+        "CU06": (640, 1040, ["Reservar para un familiar", "CU06 · HU06"]),
+        "CU10": (640, 1180, ["Avisar inasistencia", "de un pensionado", "CU10 · HU10"]),
+        "CU13": (640, 1320, ["Consultar consumo", "propio y familiar", "CU13 · HU12"]),
+        "CU04": (640, 1480, ["Ver almuerzos confirmados", "del día", "CU04 · HU04"]),
+        "CU07": (640, 1620, ["Registrar feriados", "CU07 · HU07"]),
+        "CU11": (640, 1760, ["Generar reporte mensual", "por titular", "CU11 · HU11"]),
     }
     prx, pry = 128, 46
 
     I = {
-        "I1": (1040, 190, ["Validar empleado", "en base de datos"]),
-        "I5": (1040, 340, ["Registrar almuerzos del mes", "(L–J, sin feriados)"]),
-        "I2": (1040, 620, ["Verificar día de servicio", "(L–J, no feriado, no pasado)"]),
-        "I3": (1040, 810, ["Validar hora límite", "(antes de las 9:00)"]),
-        "I6": (1040, 960, ["Validar mínimo", "de 10 almuerzos"]),
-        "I4": (1040, 1290, ["Bloquear reservas", "y confirmaciones"]),
-        "I7": (1040, 1410, ["Calcular montos", "(15 Bs / 18 Bs)"]),
+        "API": (1060, 190, ["Validar credenciales", "y estado (API)"]),
+        "FAM": (1060, 330, ["Obtener familiares", "de la API"]),
+        "MES": (1060, 540, ["Registrar almuerzos del mes", "(L–J, sin feriados)"]),
+        "HORA": (1060, 970, ["Validar hora límite", "(antes de las 9:00)"]),
+        "MIN": (1060, 1180, ["Validar mínimo de 10", "por persona"]),
+        "CALC": (1060, 1760, ["Calcular montos por titular", "(15 Bs / 18 Bs)"]),
     }
     irx, iry = 150, 40
 
-    X = {
-        "X1": (1040, 1545, ["Exportar a Excel"]),
-        "X2": (1040, 1635, ["Exportar a PDF"]),
-    }
-    xrx, xry = 120, 28
+    X = {"CU12": (1060, 1880, ["Exportar reporte", "CU12 · Excel o PDF"])}
+    xrx, xry = 128, 34
 
     for cx, cy, lines in P.values():
         ellipse(draw, cx, cy, prx, pry, "#D6EAF8", blue)
         draw_center_lines(draw, cx, cy, lines, font(14), ink)
-
     for cx, cy, lines in I.values():
         ellipse(draw, cx, cy, irx, iry, "#F5EEF8", purple)
         draw_center_lines(draw, cx, cy, lines, font(13), ink)
-
     for cx, cy, lines in X.values():
         ellipse(draw, cx, cy, xrx, xry, "#E8F8F5", green)
         draw_center_lines(draw, cx, cy, lines, font(13), ink)
 
-    def include(src, dst, text_at):
-        x1 = P[src][0] + prx
-        y1 = P[src][1]
+    def include(src, dst, lane=None, dy=0, text_at=None):
+        x1 = P[src][0] + int(prx * (1 - (dy / pry) ** 2) ** 0.5)
+        y1 = P[src][1] + dy
         x2 = I[dst][0] - irx
         y2 = I[dst][1]
-        if abs(y1 - y2) < 4:
-            dashed(draw, [(x1, y1), (x2, y2)], purple)
-            arrow_head(draw, (x2, y2), "right", purple)
-            label(draw, text_at, "«include»", font(12), purple)
-        else:
-            mid = x1 + 36
-            dashed(draw, [(x1, y1), (mid, y1), (mid, y2), (x2, y2)], purple)
-            arrow_head(draw, (x2, y2), "right", purple)
+        puntos = [(x1, y1), (x2, y2)] if lane is None else [(x1, y1), (lane, y1), (lane, y2), (x2, y2)]
+        dashed(draw, puntos, purple)
+        arrow_head(draw, (x2, y2), "right", purple)
+        if text_at:
             label(draw, text_at, "«include»", font(12), purple)
 
-    include("UC01", "I1", (760, 158))
-    include("UC06", "I5", (760, 308))
-    include("UC02", "I2", (790, 590))
-    include("UC02", "I3", (800, 760))
-    include("UC03", "I3", (760, 778))
-    include("UC07", "I3", (800, 900))
-    include("UC07", "I6", (760, 928))
-    include("UC05", "I4", (760, 1258))
-    include("UC08", "I7", (800, 1378))
+    include("CU01", "API", text_at=(800, 168))
+    include("CU05", "FAM", text_at=(800, 308))
+    include("CU08", "MES", lane=800, text_at=(812, 518))
+    include("CU09", "MES", lane=800)
+    include("CU02", "HORA", lane=840, text_at=(852, 948))
+    include("CU03", "HORA", lane=800)
+    include("CU06", "HORA", lane=800)
+    include("CU10", "HORA", lane=840, dy=-16)
+    include("CU10", "MIN", dy=12, text_at=(800, 1196))
+    include("CU11", "CALC", text_at=(800, 1738))
+    include("CU13", "CALC", lane=870, text_at=(878, 1500))
 
-    # extend: from the extension toward the base use case
-    for key, y_end, text_y in (("X1", 1510, 1518), ("X2", 1560, 1588)):
-        x1 = X[key][0] - xrx
-        y1 = X[key][1]
-        x2 = P["UC08"][0] + prx
-        dashed(draw, [(x1, y1), (x1 - 30, y1), (x1 - 30, y_end), (x2, y_end)], green)
-        arrow_head(draw, (x2, y_end), "left", green)
-        label(draw, (x1 - 28, text_y), "«extend»", font(12), green)
+    # extend: de la extensión hacia el caso base (CU12 extiende a CU11)
+    x1 = X["CU12"][0] - xrx
+    y1 = X["CU12"][1]
+    dashed(draw, [(x1, y1), (P["CU11"][0], y1), (P["CU11"][0], P["CU11"][1] + pry)], green)
+    arrow_head(draw, (P["CU11"][0], P["CU11"][1] + pry), "up", green)
+    label(draw, (700, y1 - 24), "«extend»  si el encargado elige exportar", font(12), green)
 
-    label(draw, (900, 1508), "si elige Excel", font(11), green)
-    label(draw, (900, 1662), "si elige PDF", font(11), green)
+    # Actor secundario: la API empresarial, fuera del sistema.
+    actor(draw, 1520, 140, ["API del sistema", "empresarial (TI)"])
+    poly(draw, [(I["API"][0] + irx, I["API"][1]), (1490, I["API"][1])], ink)
+    poly(draw, [(I["FAM"][0] + irx, I["FAM"][1]), (1600, I["FAM"][1]), (1600, 200), (1546, 200)], ink)
+    label(draw, (1350, 168), "solo lectura", font(12), "#34495E")
 
-    # Secondary actor
-    actor(draw, 1500, 150, ["Base de empleados", "de la institución"])
-    # line from I1 across the boundary
-    i1_right = I["I1"][0] + irx
-    poly(draw, [(i1_right, I["I1"][1]), (1455, I["I1"][1])], ink)
-    label(draw, (1330, 158), "consulta", font(12), "#34495E")
+    # Actores principales
+    actor(draw, 180, 700, ["Empleado", "(titular)"])
+    actor(draw, 180, 1560, ["Encargado del", "restaurante"])
 
-    # Actors
-    actor(draw, 180, 250, ["Empleado"])
-    actor(draw, 110, 620, ["Empleado", "no pensionado"])
-    actor(draw, 250, 900, ["Empleado", "pensionado"])
-    actor(draw, 180, 1240, ["Encargado del", "restaurante"])
-
-    # Generalization: children point to parent with hollow triangle
-    # Parent feet are around y=250+26+28+24 = 328, triangle just below the name? 
-    # Place triangle under the parent figure, tip up toward the parent.
-    parent_tip = (180, 400)
-    hollow_triangle(draw, parent_tip, "up")
-    # no pensionado (110, 620 head) up to triangle left
-    poly(draw, [(110, 620), (110, 430), (168, 430), (168, 416)], ink)
-    # pensionado (250, 900) 
-    poly(draw, [(250, 900), (250, 430), (192, 430), (192, 416)], ink)
-
-    def assoc(actor_x, actor_y, uc_key, lane_x):
+    def assoc(trunk_y, uc_key, lane_x):
         ucx, ucy, _ = P[uc_key]
-        left = ucx - prx
-        start_y = actor_y + 26
-        poly(draw, [(actor_x + 20, start_y), (lane_x, start_y), (lane_x, ucy), (left, ucy)], ink)
+        poly(draw, [(200, trunk_y), (lane_x, trunk_y), (lane_x, ucy), (ucx - prx, ucy)], ink)
 
-    # Lanes in the corridor between actors and the system
-    assoc(180, 276, "UC01", 330)
-    assoc(180, 276, "UC06", 350)
-    assoc(180, 276, "UC09", 370)
-    assoc(110, 646, "UC02", 300)
-    assoc(110, 646, "UC03", 320)
-    assoc(250, 926, "UC07", 300)
-    assoc(180, 1266, "UC04", 330)
-    assoc(180, 1266, "UC05", 350)
-    assoc(180, 1266, "UC08", 370)
-    # Encargado also logs in. Route along the far left so it does not cross the other actors.
-    poly(
-        draw,
-        [(160, 1292), (40, 1292), (40, 190), (640 - prx, 190)],
-        ink,
-    )
+    trunk = 726
+    for clave, lane in (("CU01", 300), ("CU05", 320), ("CU08", 340), ("CU09", 360)):
+        assoc(trunk, clave, lane)
+    for clave, lane in (("CU13", 300), ("CU10", 320), ("CU06", 340), ("CU03", 360), ("CU02", 380)):
+        assoc(trunk, clave, lane)
 
-    # Legend
-    legend = (390, 1718, 1320, 1828)
+    trunk_enc = 1586
+    for clave, lane in (("CU04", 340), ("CU11", 300), ("CU07", 320)):
+        assoc(trunk_enc, clave, lane)
+    # El encargado también inicia sesión: por la izquierda, sin cruzar al empleado.
+    poly(draw, [(160, trunk_enc), (40, trunk_enc), (40, 176), (P["CU01"][0] - prx + 2, 176)], ink)
+
+    # Nota: el familiar no es actor
+    nota = (1350, 1420, 1690, 1620)
+    draw.rectangle(nota, fill="#FEF9E7", outline="#B7950B")
+    for i, linea in enumerate([
+        "El familiar de primer grado",
+        "no es actor: no ingresa (R9).",
+        "El empleado titular reserva,",
+        "pensiona o avisa por él,",
+        "eligiéndolo de la lista de",
+        "CU05 (R11). No hay nombre libre.",
+    ]):
+        label(draw, (1364, 1430 + i * 30), linea, font(14), ink)
+
+    legend = (420, 1966, 1330, 2076)
     draw.rounded_rectangle(legend, radius=6, outline="#D0D7DE", width=1)
-    ellipse(draw, 430, 1752, 16, 10, "#D6EAF8", blue)
-    label(draw, (456, 1742), "Objetivo del actor, trazable a una historia del backlog.", font(13), ink)
-    ellipse(draw, 430, 1782, 16, 10, "#F5EEF8", purple)
-    label(draw, (456, 1772), "«include»: se ejecuta siempre, como parte del caso base.", font(13), ink)
-    ellipse(draw, 430, 1812, 16, 10, "#E8F8F5", green)
-    label(
-        draw,
-        (456, 1802),
-        "«extend»: solo si el encargado elige ese formato. El rechazo por hora o por el mínimo de 10 no es un extend.",
-        font(13),
-        ink,
-    )
+    ellipse(draw, 460, 2000, 16, 10, "#D6EAF8", blue)
+    label(draw, (486, 1990), "Objetivo del actor, trazable a una historia del backlog.", font(13), ink)
+    ellipse(draw, 460, 2030, 16, 10, "#F5EEF8", purple)
+    label(draw, (486, 2020), "«include»: se ejecuta siempre, como parte del caso base.", font(13), ink)
+    ellipse(draw, 460, 2060, 16, 10, "#E8F8F5", green)
+    label(draw, (486, 2050), "«extend»: solo si el encargado elige exportar. Un rechazo (9:00, tope, mínimo) no es extend.", font(13), ink)
 
     png = OUT / "casos-de-uso.png"
     img.save(png, "PNG")

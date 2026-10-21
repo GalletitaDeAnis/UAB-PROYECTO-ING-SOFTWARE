@@ -1,5 +1,7 @@
 # Sprint 1
 
+> Este corte se entregó con el ingreso por identificador (backlog v1) y SQLite. Desde el backlog v2 el ingreso usa usuario y contraseña del sistema empresarial y la base es PostgreSQL: los pasos actuales están en el [README](../README.md).
+
 Objetivo: un empleado reserva y cancela, y el encargado ve cuántas reservas esporádicas hay en el día.
 
 ## Qué se entrega
@@ -10,7 +12,7 @@ Objetivo: un empleado reserva y cancela, y el encargado ve cuántas reservas esp
 | Casos de uso | [casos-de-uso.md](casos-de-uso.md) y [diagrams/casos-de-uso.png](diagrams/casos-de-uso.png) |
 | Diagrama de clases | [diagrama-de-clases.md](diagrama-de-clases.md) y [diagrams/clases.png](diagrams/clases.png) |
 | Incremento funcional | Pantallas de ingreso, reserva, cancelación y lista del día |
-| Pruebas por criterio | `tests/hu01.ingresar.test.ts` a `tests/hu04.lista.test.ts` |
+| Pruebas por criterio | `tests/hu01.iniciarSesion.test.ts` a `tests/hu04.lista.test.ts` |
 | Definition of Done | [definition-of-done.md](definition-of-done.md) |
 
 La arquitectura por capas ya está escrita en [arquitectura.md](arquitectura.md). En la rúbrica ese documento pesa en el Sprint 2; se adelantó porque el incremento se construyó sobre esas decisiones.

@@ -1,235 +1,230 @@
-# Casos de uso
+# Casos de uso (versión 2)
 
-Cada caso de uso de este documento es el objetivo de un actor y corresponde a una historia del [backlog](backlog.md). Los óvalos pequeños del diagrama no son historias: son comportamiento que siempre ocurre (`include`) o que solo ocurre si el actor elige un formato (`extend`).
+Sistema de reservas del restaurante «Rumbo al Cielo» · Unión Boliviana. Alineado con el [backlog v2](backlog.md).
+
+> Fuente: documento del equipo «Diagrama y descripción de casos de uso – versión 2». El texto de los flujos es el del equipo. El diagrama se redibujó con las correcciones de la sección «Qué se corrigió del diagrama» (detalle en [revision-documentos-v2.md](revision-documentos-v2.md)).
+
+| Control del documento | Detalle |
+| --- | --- |
+| Base de requisitos | Backlog e historias de usuario, versión 2 |
+| Propósito | Alinear actores, casos de uso, relaciones, trazabilidad y flujos con las 12 historias vigentes. |
+| Alcance | Autenticación mediante API empresarial, reservas propias y de familiares, pensiones, feriados, inasistencias, consulta de consumo y reportes. |
+| Criterio importante | Los familiares de primer grado son beneficiarios, pero no ingresan al sistema; el empleado titular actúa en su nombre. |
 
 ![Diagrama de casos de uso](diagrams/casos-de-uso.png)
 
-Fuente: [diagrams/casos-de-uso.puml](diagrams/casos-de-uso.puml). La figura que se entrega es el PNG: PlantUML cruza las flechas y el `extend` parece llegar a otro caso.
+Fuente: [diagrams/render_casos_de_uso.py](diagrams/render_casos_de_uso.py) (posiciones fijas, para que las flechas no se crucen) y [diagrams/casos-de-uso.puml](diagrams/casos-de-uso.puml) como versión en texto.
 
-## Qué se corrigió del diagrama anterior
+## 1. Actores
 
-El diagrama que circuló en el grupo describe el mismo restaurante, pero no se puede entregar así junto con el backlog:
-
-| En el diagrama anterior | Problema | Cómo quedó |
+| Actor | Tipo | Objetivo e interacción |
 | --- | --- | --- |
-| «Gestionar menú del día» y «Notificar a usuarios (push)» | El alcance dice que el menú y las notificaciones push no entran. | No están. |
-| Flecha hacia «Sistema de RRHH (Planilla)» | El sistema no se conecta con planilla. El encargado descarga Excel o PDF y lo entrega. | No hay actor de planilla. El reporte termina en el encargado. |
-| «Rechazar si no cumple reglas» como `extend` | Rechazar es un flujo alternativo, no un caso opcional. `extend` no significa «si sale mal». | El rechazo quedó escrito dentro de UC07. |
-| «Excluir inasistencias» como `extend` de la lista del día | Quitar al que avisó no es opcional: la lista siempre lo hace. | Es el paso normal de UC04. El aviso en sí es UC07. |
-| «Ver mis reservas y consumo del mes» en un solo óvalo | Mezcla el ingreso (HU01) con el consumo del mes (HU09). | UC01 muestra el nombre y sus almuerzos al entrar. UC09 es el consumo y el monto. |
-| «Validar hora límite» solo en reservar y cancelar | El pensionado también tiene límite a las 9:00 para avisar. | El mismo `include` lo usan UC02, UC03 y UC07. |
+| Empleado (titular) | Persona; actor principal | Inicia sesión con credenciales empresariales; reserva y cancela almuerzos propios; consulta familiares; reserva o pensiona familiares; avisa inasistencias de los pensionados a su cargo (él o un familiar) y consulta el consumo mensual propio y familiar. |
+| Encargado del restaurante | Persona; actor con permisos específicos | Consulta la lista diaria, registra feriados, genera el reporte mensual agrupado por titular y lo exporta a Excel o PDF. |
+| API del sistema empresarial | Sistema externo; actor secundario | Valida las credenciales, devuelve los datos del empleado y la lista de familiares de primer grado. Se consume en modo de solo lectura. |
+| Familiar de primer grado | Beneficiario, **no actor** | Consume almuerzos, pero no inicia sesión. El empleado titular hace en su nombre las reservas, pensiones y avisos (R9). |
 
-## Actores
+## 2. Relaciones «include» y «extend»
 
-| Actor | Quién es | Qué busca |
+| Relación | Tipo | Justificación |
 | --- | --- | --- |
-| Empleado | Rol general. Toda persona que come, pensionada o no, lo es. | Ingresar, ver su consumo y pedir la pensión del mes siguiente. |
-| Empleado no pensionado | Especialización. En ese mes no tiene pensión activa. | Reservar y cancelar a 18 Bs. |
-| Empleado pensionado | Especialización. En ese mes tiene pensión activa. | Avisar inasistencias. No reserva día por día. |
-| Encargado del restaurante | Otro rol, aunque sea la misma persona física que también come. | Ver la lista del día, cargar feriados y exportar el reporte. |
-| Base de empleados de la institución | Actor secundario. No inicia ningún caso. | Responde si el identificador existe y está activo. |
+| CU01 → Validar credenciales y estado (API) | «include» | Todo inicio de sesión pasa por la API empresarial (R12). |
+| CU05 → Obtener familiares de la API | «include» | La lista sale de la API; no se agregan personas a mano (HU05 CA2). |
+| CU08 y CU09 → Registrar almuerzos del mes | «include» | Al confirmar una pensión, propia o de un familiar, siempre se generan los almuerzos de los días de servicio sin feriados (R4). |
+| CU02, CU03, CU06, CU10 → Validar hora límite | «include» | Reservar, cancelar y avisar siempre comprueban las 9:00 (R2b). |
+| CU10 → Validar mínimo de 10 por persona | «include» | Todo aviso comprueba el mínimo de esa persona (R5, R6). |
+| CU11 y CU13 → Calcular montos por titular | «include» | El reporte y el consumo usan el mismo cálculo de 15 y 18 Bs. |
+| CU12 → CU11 | «extend» | Exportar es opcional: el encargado puede revisar el reporte en pantalla y solo exporta si lo pide. La flecha va de CU12 hacia CU11. |
 
-La generalización importa: reservar y cancelar salen solo del no pensionado. Avisar inasistencia sale solo del pensionado. Ingresar, ver el consumo y solicitar la pensión salen del empleado general, así que ambos las heredan. Una misma persona cambia de actor según el mes: en septiembre puede ser no pensionada y en octubre pensionada.
+`include` es comportamiento que siempre ocurre; `extend`, comportamiento opcional bajo una condición. Los rechazos (las 9:00, el tope, el mínimo de 10) son **flujos alternativos**, no `extend`.
 
-El encargado no hereda del empleado. Sus objetivos son los de la cocina y la planilla. Si además almuerza, usa el sistema una segunda vez con el actor empleado.
+Iniciar sesión (CU01) es una **precondición** de los demás casos, no un `include` de cada uno: si fuera `include`, cada reserva pediría usuario y contraseña de nuevo.
 
-## Include y extend
+## 3. Trazabilidad
 
-`include` es una flecha del caso base al caso incluido, con línea discontinua. El incluido se ejecuta siempre.
+| HU | Historia (v2) | Actor | Caso de uso | Sprint |
+| --- | --- | --- | --- | --- |
+| HU01 | Iniciar sesión con usuario del sistema empresarial | Empleado; encargado; API | CU01 Iniciar sesión | S1 |
+| HU02 | Reservar mi almuerzo (uso esporádico) | Empleado | CU02 Reservar almuerzo propio | S1 |
+| HU03 | Cancelar mi reserva (uso esporádico) | Empleado | CU03 Cancelar reserva propia | S1 |
+| HU04 | Ver almuerzos confirmados del día | Encargado | CU04 Ver almuerzos del día | S1 |
+| HU05 | Ver mis familiares habilitados | Empleado; API | CU05 Consultar familiares | S2 |
+| HU06 | Reservar almuerzo para un familiar | Empleado | CU06 Reservar para familiar | S2 |
+| HU07 | Registrar feriados del mes | Encargado | CU07 Registrar feriados | S2 |
+| HU08 | Pensionarme | Empleado | CU08 Pensionarse | S2 |
+| HU09 | Pensionar a un familiar | Empleado | CU09 Pensionar familiar | S3 |
+| HU10 | Avisar inasistencia de un pensionado | Empleado | CU10 Avisar inasistencia | S3 |
+| HU11 | Generar reporte mensual por titular | Encargado | CU11 Generar reporte; CU12 Exportar | S4 |
+| HU12 | Ver mi consumo del mes (y de mi familia) | Empleado | CU13 Consultar consumo | S4 |
 
-`extend` es una flecha del caso que extiende hacia el caso base. Solo corre si se cumple una condición. Aquí la condición es que el encargado eligió ese formato.
+En el código, cada caso de uso es una clase de `src/aplicacion/` con el mismo nombre (por ejemplo, CU06 → `ReservarAlmuerzo` con la persona elegida; CU12 → `ExportarReporteMensual`).
 
-No se usó `extend` para errores, rechazos ni reglas. Eso va en los flujos alternativos.
+## 4. Reglas de negocio aplicadas
 
-## Trazabilidad
+| Código | Regla |
+| --- | --- |
+| R1–R1b | Almuerzos de lunes a jueves; empleados y familiares ya existen en el sistema empresarial y se consultan por API de solo lectura. |
+| R2 | La reserva esporádica cuesta 18 Bs y se registra a nombre de quien consume. |
+| R2b | Reservar, cancelar o avisar para el día se permite solo antes de las 9:00; desde las 9:00 se rechaza. |
+| R3–R4 | La pensión cuesta 15 Bs por persona y se pide antes de que empiece el mes. Los almuerzos se registran solos para cada día de servicio no feriado. |
+| R5–R6 | El mínimo de 10 se controla por pensionado. Un aviso no puede dejar a esa persona por debajo del mínimo. |
+| R7–R8 | Las faltas sin aviso oportuno se cobran. El reporte se agrupa por titular y detalla cada persona; el descuento es por planilla. |
+| R9–R11 | Los familiares no ingresan. Cada reserva y pensión es nominal; el máximo diario es el titular más sus familiares habilitados. |
+| R12 | Solo empleados activos ingresan; la API valida las credenciales. Si no responde en 5 s, se niega el acceso y se informa. |
 
-| Caso | Historia | Actor principal |
+## 5. Descripción de los casos de uso
+
+Las llamadas a la API son externas; la contraseña no se guarda en el sistema del restaurante.
+
+### CU01 – Iniciar sesión
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU01 |
+| Actores | Empleado o encargado; secundario: API del sistema empresarial. |
+| Precondición | El usuario tiene credenciales del sistema empresarial. |
+| Flujo principal | 1. El usuario escribe su usuario y contraseña empresarial. 2. El sistema envía las credenciales a la API por HTTPS, sin guardar la contraseña. 3. La API valida y devuelve un identificador o token. 4. El sistema consulta los datos del empleado y verifica que esté activo. 5. El sistema actualiza la copia local de familiares de primer grado. 6. El sistema crea una sesión propia que vence tras 30 minutos de inactividad y muestra las opciones según el rol. |
+| Flujos alternativos | 1. Credenciales incorrectas: «Usuario o contraseña incorrectos» y no inicia sesión. 2. Empleado inexistente o inactivo: se niega el acceso. 3. La API no responde en 5 s o da error: «No se pudo validar tu usuario, intenta más tarde» y no ingresa. 4. Sesión inactiva por 30 minutos: se pide iniciar sesión de nuevo. |
+| Postcondición | El usuario queda autenticado y autorizado según su rol. |
+
+### CU02 – Reservar almuerzo propio
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU02 |
+| Actor | Empleado no pensionado ese mes. |
+| Precondición | Inició sesión; no tiene otro almuerzo esa fecha. |
+| Flujo principal | 1. Elige la fecha. 2. El sistema comprueba que sea lunes a jueves y no feriado. 3. Si es para hoy, verifica que sea antes de las 9:00. 4. Comprueba que no exista reserva ni almuerzo de pensión para esa persona y fecha. 5. El empleado confirma. 6. Se registra una reserva nominal de 18 Bs que aparece en «Mis reservas». |
+| Flujos alternativos | 1. Viernes a domingo o feriado: no hay servicio, no se registra. 2. A las 9:00 o después: se rechaza para ese día. 3. Ya hay almuerzo propio ese día: no se duplica. |
+| Postcondición | La reserva queda a nombre del empleado y aparece en la lista diaria del encargado. |
+
+### CU03 – Cancelar reserva propia
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU03 |
+| Actor | Empleado. |
+| Precondición | Tiene una reserva esporádica activa. |
+| Flujo principal | 1. Abre «Mis reservas» y elige la reserva. 2. El sistema valida que sea antes de las 9:00 del día del almuerzo. 3. Confirma. 4. La reserva queda cancelada y sale del conteo y del cobro. |
+| Flujos alternativos | 1. A las 9:00 o después: no se cancela; se informa que se cobrará aunque no asista. |
+| Postcondición | La reserva cancelada no aparece como confirmada ni entra al importe del mes. |
+
+### CU04 – Ver almuerzos confirmados del día
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU04 |
+| Actor | Encargado. |
+| Precondición | Inició sesión con permisos de encargado. |
+| Flujo principal | 1. Elige el día. 2. El sistema reúne las reservas esporádicas activas y los almuerzos confirmados de pensionados. 3. Excluye cancelaciones, avisos y feriados. 4. Muestra el total y una fila por persona con nombre, tipo (empleado o familiar), titular y modalidad. |
+| Flujos alternativos | 1. Feriado o día sin servicio: se informa que no hay almuerzos. 2. Sin reservas: total 0 y «No hay almuerzos confirmados para hoy». |
+| Postcondición | El encargado sabe cuántos almuerzos preparar. |
+
+### CU05 – Consultar familiares habilitados
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU05 |
+| Actores | Empleado; secundario: API empresarial. |
+| Precondición | Inició sesión. |
+| Flujo principal | 1. Abre «Mi familia». 2. El sistema consulta la copia local actualizada desde la API. 3. Muestra nombre y parentesco de cada familiar. 4. Calcula el tope diario: 1 + familiares habilitados. |
+| Flujos alternativos | 1. Sin familiares: mensaje y tope 1. 2. Alguien que no es de primer grado en la API: no aparece y no se puede agregar a mano. |
+| Postcondición | El empleado sabe por quiénes puede reservar o pensionar. |
+
+### CU06 – Reservar almuerzo para un familiar
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU06 |
+| Actor | Empleado titular. |
+| Precondición | El familiar figura en la lista vigente de CU05. |
+| Flujo principal | 1. Elige un familiar y la fecha. 2. El sistema revalida que siga habilitado y que sea día de servicio no feriado. 3. Si es para hoy, verifica que sea antes de las 9:00. 4. Comprueba que el familiar no tenga otro almuerzo ese día y que no se pase el tope diario. 5. Confirma y queda el almuerzo a nombre del familiar, a 18 Bs, vinculado al titular. |
+| Flujos alternativos | 1. Familiar no habilitado, duplicado, día sin servicio, hora vencida o tope alcanzado: se rechaza. 2. Cancelar la reserva de un familiar antes de las 9:00 cancela solo esa; las demás siguen. |
+| Postcondición | El almuerzo queda a nombre del familiar y el descuento al titular. No hay nombres libres ni almuerzos genéricos. |
+
+### CU07 – Registrar feriados
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU07 |
+| Actor | Encargado. |
+| Flujo principal | 1. Elige la fecha y escribe la descripción. 2. El sistema verifica que sea lunes a jueves. 3. Confirma. 4. La fecha queda como feriado y sale de reservas, pensiones y cobros. |
+| Flujos alternativos | 1. Viernes a domingo: no hay servicio ordinario, no hace falta registrarlo. 2. Si ya había almuerzos confirmados esa fecha, se excluyen del reporte y del cobro. |
+| Postcondición | El feriado no suma almuerzos ni importes para nadie. |
+
+### CU08 – Pensionarse para el mes siguiente
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU08 |
+| Actor | Empleado. |
+| Precondición | No tiene pensión para el mes objetivo. |
+| Flujo principal | 1. Elige «Pensionarme» para el mes siguiente. 2. El sistema verifica que sea antes del inicio de ese mes. 3. Calcula los días de lunes a jueves sin feriados y muestra el importe a 15 Bs. 4. Confirma. 5. Se registra la pensión nominal y se ejecuta «Registrar almuerzos del mes». |
+| Flujos alternativos | 1. El mes ya empezó: se rechaza. 2. Ya tiene pensión: no se duplica. 3. Con almuerzo de pensión ese día, no se permite una reserva esporádica adicional. 4. Si los feriados dejan menos de 10 días de servicio, se rechaza. |
+| Postcondición | Queda pensionado con sus almuerzos confirmados a 15 Bs. |
+
+### CU09 – Pensionar a un familiar
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU09 |
+| Actor | Empleado titular. |
+| Flujo principal | 1. Elige uno o varios familiares para el mes siguiente. 2. El sistema revalida que cada uno esté habilitado y que sea antes del inicio del mes. 3. Comprueba que no haya pensión duplicada ni se pase el tope. 4. Confirma. 5. Se registra una pensión separada por familiar y sus almuerzos del mes a 15 Bs. |
+| Flujos alternativos | 1. Mes empezado, familiar no habilitado o ya pensionado: se rechaza esa persona; las demás siguen. 2. El titular puede pensionar a un familiar aunque él no esté pensionado. |
+| Postcondición | Cada familiar queda pensionado por separado; los importes van al titular. |
+
+### CU10 – Avisar inasistencia de un pensionado
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU10 |
+| Actor | Empleado titular (para sí o para un familiar pensionado). |
+| Precondición | La persona tiene un almuerzo de pensión confirmado ese día. |
+| Flujo principal | 1. Elige a la persona y el día. 2. El sistema verifica que sea antes de las 9:00. 3. Calcula cuántos almuerzos le quedarían a esa persona en el mes. 4. Si conserva al menos 10, confirma. 5. Se libera solo el almuerzo de esa persona y sale del cobro. |
+| Flujos alternativos | 1. A las 9:00 o después: se rechaza y se cobra. 2. Quedaría con menos de 10: se rechaza; el mínimo es por persona. 3. Sin aviso a tiempo y sin asistir: se descuenta. |
+| Postcondición | El aviso afecta a una sola persona. |
+
+### CU11 – Generar reporte mensual por titular
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU11 |
+| Actor | Encargado. |
+| Flujo principal | 1. Elige el mes. 2. El sistema reúne los almuerzos confirmados no cancelados, sin feriados. 3. Agrupa por titular y desglosa cada persona. 4. Aplica 15 Bs a pensión y 18 Bs a esporádico. 5. Muestra persona, parentesco, modalidad, cantidad, precio, subtotal y total por titular. |
+| Flujos alternativos | 1. Mes sin consumos: se informa y no aparecen titulares sin consumo. 2. Lo no cancelado a tiempo se cobra aunque no haya asistido. |
+| Postcondición | El encargado tiene los totales para el descuento por planilla. Ejemplo: 12 × 15 + 10 × 15 + 3 × 18 = 384 Bs. |
+
+### CU12 – Exportar reporte mensual
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU11 CA3 |
+| Actor | Encargado. |
+| Precondición | Hay un reporte generado en CU11. |
+| Flujo principal | 1. Elige «Exportar». 2. El sistema ofrece Excel y PDF. 3. Elige el formato. 4. Se genera el archivo con los mismos datos y totales de la pantalla. |
+| Postcondición | El archivo queda listo para revisar y enviar a planilla. |
+
+### CU13 – Consultar consumo propio y familiar
+
+| Campo | Descripción |
+| --- | --- |
+| Historia | HU12 |
+| Actor | Empleado. |
+| Flujo principal | 1. Abre «Mi consumo» y elige el mes. 2. Ve el detalle nominal suyo y de cada familiar. 3. Ve modalidad, cantidad, precio y subtotal por persona. 4. Ve el total que se le descontará. 5. Para cada pensionado, ve cuántos almuerzos lleva y cuántas inasistencias más puede avisar sin bajar de 10. |
+| Flujos alternativos | 1. Sin almuerzos: 0 almuerzos y 0 Bs. |
+
+## 6. Pendientes con el Product Owner
+
+Los puntos S1 a S5 siguen abiertos. Están en el [backlog](backlog.md#supuestos-y-preguntas-abiertas-validar-con-el-product-owner), junto con lo que hace hoy el código en cada caso.
+
+## 7. Qué se corrigió del diagrama
+
+| En el diagrama del Word | Problema | Cómo quedó |
 | --- | --- | --- |
-| UC01 Ingresar al sistema | HU01 | Empleado y encargado |
-| UC02 Reservar almuerzo | HU02 | Empleado no pensionado |
-| UC03 Cancelar reserva | HU03 | Empleado no pensionado |
-| UC04 Ver almuerzos confirmados del día | HU04, y se amplía con HU06 y HU07 | Encargado |
-| UC05 Registrar feriados del mes | HU05 | Encargado |
-| UC06 Solicitar pensionamiento | HU06 | Empleado |
-| UC07 Avisar inasistencia | HU07 | Empleado pensionado |
-| UC08 Generar reporte mensual | HU08 | Encargado |
-| UC09 Ver mi consumo del mes | HU09 | Empleado |
-
-## Especificación
-
-### UC01 Ingresar al sistema
-
-- Historia: HU01.
-- Actores: empleado o encargado. Actor secundario: base de empleados, a través del include.
-- Precondición: ninguna.
-- Disparador: la persona pide ingresar.
-- Flujo principal:
-  1. La persona indica su identificador institucional.
-  2. Include «Validar empleado en base de datos».
-  3. El sistema muestra su nombre y sus almuerzos.
-  4. Si en este sistema tiene rol de encargado, también muestra la lista del día, los feriados y el reporte.
-- Flujos alternativos:
-  - 2a. El identificador no existe o el empleado está inactivo. El sistema no abre la sesión y no muestra datos de otra persona.
-- Postcondición: hay una sesión de esa persona, o no hay sesión.
-- Reglas: R1b.
-
-### Include — Validar empleado en base de datos
-
-Lo incluye UC01, siempre. El sistema pregunta a la base institucional si ese identificador existe y está activo. No crea empleados y no guarda la contraseña. En el proyecto, la base real se sustituye por datos de prueba detrás del mismo puerto (ver arquitectura).
-
-### UC02 Reservar almuerzo
-
-- Historia: HU02.
-- Actor: empleado no pensionado.
-- Precondición: UC01. No tiene pensión activa en el mes de la fecha elegida.
-- Disparador: confirma una fecha.
-- Flujo principal:
-  1. Indica la fecha del almuerzo.
-  2. Include «Verificar día de servicio».
-  3. Include «Validar hora límite».
-  4. El sistema comprueba que esa persona no tenga ya un almuerzo en esa fecha.
-  5. Registra el almuerzo como esporádico, a 18 Bs, confirmado.
-- Flujos alternativos:
-  - 2a. La fecha es viernes, sábado, domingo, feriado o ya pasó. No registra nada.
-  - 3a. Ya son las 9:00 o más del día del almuerzo. No registra nada.
-  - 4a. Ya existe un almuerzo ese día. No duplica.
-  - 5a. La persona es pensionada de ese mes. No crea una reserva esporádica encima.
-- Postcondición: queda un almuerzo confirmado a 18 Bs, o el estado anterior no cambia.
-- Reglas: R2, R2b, R7b.
-
-### UC03 Cancelar reserva
-
-- Historia: HU03.
-- Actor: empleado no pensionado.
-- Precondición: UC01 y existe una reserva esporádica confirmada en esa fecha.
-- Disparador: pide cancelar esa reserva.
-- Flujo principal:
-  1. Elige la reserva.
-  2. Include «Validar hora límite».
-  3. El sistema marca ese almuerzo como cancelado.
-- Flujo alternativo:
-  - 2a. Ya son las 9:00 o más del día del almuerzo. Sigue confirmado y se cobrará.
-- Postcondición: el día no entra al reporte, o sigue confirmado.
-- Reglas: R2b, R7.
-
-### Include — Validar hora límite
-
-Lo incluyen UC02, UC03 y UC07, siempre. Compara el momento actual con las 9:00 del día en que se sirve ese almuerzo, en America/La_Paz. Si la fecha del almuerzo es futura, el límite de ese día todavía no llegó. A las 9:00 en punto ya no se acepta el cambio.
-
-### Include — Verificar día de servicio
-
-Lo incluye UC02, siempre. El día sirve solo si es lunes, martes, miércoles o jueves, no es feriado y no es una fecha pasada.
-
-### UC04 Ver almuerzos confirmados del día
-
-- Historia: HU04 en el Sprint 1. HU06 y HU07 amplían quién aparece.
-- Actor: encargado.
-- Precondición: UC01 con rol de encargado.
-- Disparador: abre la lista de una fecha de servicio.
-- Flujo principal:
-  1. El sistema toma los almuerzos confirmados de esa fecha.
-  2. Muestra nombre, tipo (pensionado o no pensionado) y el total.
-  3. No muestra cancelados ni inasistencias avisadas.
-- Postcondición: no cambia datos. Es una consulta.
-- Reglas: R4, R7. No se confunde la lista con un pase de lista del comedor.
-
-### UC05 Registrar feriados del mes
-
-- Historia: HU05.
-- Actor: encargado.
-- Precondición: UC01 con rol de encargado.
-- Disparador: indica una fecha y una descripción.
-- Flujo principal:
-  1. Indica el día de lunes a jueves.
-  2. Include «Bloquear reservas y confirmaciones».
-  3. El sistema guarda el feriado.
-- Flujo alternativo:
-  - 1a. La fecha es viernes, sábado o domingo. No se guarda.
-- Postcondición: ese día no admite reserva ni confirmación de pensión, y no se cobra.
-- Reglas: R7b.
-
-### Include — Bloquear reservas y confirmaciones
-
-Lo incluye UC05, siempre. A partir del registro, no se puede reservar ese día. Si un pensionado ya lo tenía confirmado, ese almuerzo deja de contar y deja de cobrarse.
-
-### UC06 Solicitar pensionamiento
-
-- Historia: HU06.
-- Actor: empleado (todavía no pensionado de ese mes).
-- Precondición: UC01. Los feriados conocidos del mes siguiente ya se pueden consultar (HU05).
-- Disparador: pide la pensión del mes siguiente.
-- Flujo principal:
-  1. El sistema comprueba que está pidiendo el mes siguiente y que ese mes todavía no empezó.
-  2. Calcula los días de servicio: lunes a jueves, sin feriados.
-  3. Comprueba que esos días son al menos 10.
-  4. Include «Registrar almuerzos del mes».
-  5. La persona queda pensionada de ese mes.
-- Flujos alternativos:
-  - 1a. Pide el mes en curso, un mes ya empezado u otro mes que no sea el siguiente. No se crea la pensión.
-  - 3a. Hay menos de 10 días de servicio. No se crea la pensión.
-  - 5a. Ya tenía pensión de ese mes. No se duplica.
-- Postcondición: existe una pensión y un almuerzo confirmado a 15 Bs por cada día de servicio, o no se creó nada.
-- Reglas: R3, R4, R5, R7b.
-
-### Include — Registrar almuerzos del mes
-
-Lo incluye UC06, siempre. Crea un almuerzo de origen pensión, a 15 Bs, confirmado, en cada día de servicio del mes. No crea filas en feriados ni en viernes, sábado o domingo.
-
-### UC07 Avisar inasistencia
-
-- Historia: HU07.
-- Actor: empleado pensionado.
-- Precondición: UC01 y tiene un almuerzo de pensión confirmado en esa fecha.
-- Disparador: avisa que no asistirá.
-- Flujo principal:
-  1. Elige el día.
-  2. Include «Validar hora límite».
-  3. Include «Validar mínimo de 10 almuerzos».
-  4. El sistema marca ese almuerzo como inasistencia avisada.
-  5. Deja de mostrarse en la lista del día y deja de sumar al descuento.
-- Flujos alternativos:
-  - 2a. Ya son las 9:00 o más de ese día. El almuerzo sigue confirmado y se cobra.
-  - 3a. Si se avisara, quedarían menos de 10 confirmados en el mes. El sistema no deja avisar y explica que ese almuerzo se cobra aunque no asista.
-- Postcondición: el día no se cobra, o sigue confirmado.
-- Reglas: R5, R6, R7.
-
-### Include — Validar mínimo de 10 almuerzos
-
-Lo incluye UC07, siempre. Cuenta los almuerzos de pensión que siguen confirmados en el mes. Los feriados y los ya avisados no entran. El aviso solo procede si después del aviso la cuenta sigue en 10 o más.
-
-### UC08 Generar reporte mensual
-
-- Historia: HU08.
-- Actor: encargado.
-- Precondición: UC01 con rol de encargado. Hay un mes cerrado o el encargado pide el mes de todos modos para revisarlo.
-- Disparador: pide el reporte de un mes.
-- Flujo principal:
-  1. Include «Calcular montos».
-  2. El sistema muestra una línea por empleado con cantidad mayor que cero: nombre, tipo, cantidad, precio unitario y total.
-  3. El encargado elige el formato. Extend «Exportar a Excel» o extend «Exportar a PDF».
-- Postcondición: se produjo un archivo. Los almuerzos no cambian. Nada se envía solo a planilla.
-- Reglas: R7, R7b, R8.
-
-### Include — Calcular montos
-
-Lo incluye UC08, siempre. Por cada empleado del mes suma los almuerzos que siguen confirmados. El esporádico va a 18 Bs y el de pensión a 15 Bs. No suma cancelados, inasistencias avisadas ni feriados. Quien queda en cero no tiene línea.
-
-### Extend — Exportar a Excel / Exportar a PDF
-
-Extienden UC08. Condición: el encargado eligió ese formato. El cálculo es el mismo; cambia el archivo. No son dos historias.
-
-### UC09 Ver mi consumo del mes
-
-- Historia: HU09.
-- Actor: empleado.
-- Precondición: UC01.
-- Disparador: abre su consumo de un mes.
-- Flujo principal:
-  1. El sistema cuenta sus almuerzos confirmados del mes y el monto (15 Bs o 18 Bs según el origen).
-  2. Si es pensionado, muestra además cuántas inasistencias puede avisar sin bajar de 10.
-- Postcondición: no cambia datos.
-- Reglas: R5, R8.
-
-## Fuera del diagrama a propósito
-
-No hay caso de uso para dar de alta empleados, pagar en línea, publicar el menú, enviar push ni depositar el archivo en el sistema de planilla. Si más adelante el cliente los pide, entran como historias nuevas. No se cuelgan de estos nueve casos.
+| La figura 1 numera UC01 a UC12 con las historias de la v1 (por ejemplo, «Solicitar pensionamiento UC06 · HU06», «Generar reporte UC08 · HU08») y agrega abajo UC10 a UC12 | No coincide con la tabla de trazabilidad del mismo documento (CU08 = HU08 Pensionarse, CU11 = HU11 Reporte) | Numeración CU01 a CU13 igual a la tabla. |
+| La figura 2 tiene dos óvalos «Iniciar sesión (UC01)», y usa UC02, UC03, UC08, UC10, UC12, UC14 y UC25 con otros significados | Un caso de uso aparece dos veces y los números no corresponden a nada del texto | Un solo CU01. |
+| Todos los casos tienen «include» hacia Iniciar sesión, con flechas de dos puntas | Iniciar sesión es precondición, no comportamiento incluido. Además «include» tiene una sola dirección | CU01 como precondición, escrito en cada caso. |
+| «Validar empleado en base de datos» | En la v2 se valida contra la API, no contra una base propia | «Validar credenciales y estado (API)». |
+| Asociaciones del encargado que llegan a casos del empleado y una línea diagonal suelta | El encargado no reserva ni pensiona por otros | El encargado solo se asocia a CU01, CU04, CU07 y CU11. |
+| Actor «Empleado pensionado» como especialización | En la v2 el titular avisa también por un familiar pensionado aunque él no lo esté; la especialización ya no separa a nadie | Un solo actor «Empleado (titular)». |
+| Dos «extend» separados para Excel y PDF | El texto (CU12) tiene un solo caso de exportar con dos formatos | Un solo CU12 que extiende a CU11. |

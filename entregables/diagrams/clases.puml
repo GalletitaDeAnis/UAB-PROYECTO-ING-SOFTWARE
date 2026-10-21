@@ -15,12 +15,20 @@ skinparam class {
   AttributeFontSize 12
 }
 
-title Diagrama de clases\nSistema de Reservas y Pensionamiento de Almuerzos
+title Diagrama de clases (backlog v2)\nSistema de Reservas y Pensionamiento de Almuerzos
 
-class Empleado <<proyección externa>> {
-  codigoInstitucional : Texto
+abstract class Persona <<copia de la API empresarial>> {
+  id : Texto
   nombreCompleto : Texto
-  activo : Booleano
+  vigente : Booleano
+}
+
+class Empleado {
+  codigoInstitucional : Texto
+}
+
+class Familiar {
+  parentesco : Texto
 }
 
 class Autorizacion {
@@ -32,16 +40,21 @@ enum Rol {
   ENCARGADO
 }
 
+class Sesion {
+  tokenHash : Texto
+  ultimaActividad : FechaHora
+}
+
 class Pension {
   anio : Entero
   mes : Entero
-  fechaSolicitud : Fecha
+  solicitadaEl : Fecha
 }
 
 class Almuerzo {
   fecha : Fecha
   origen : OrigenAlmuerzo
-  precioBs : Decimal
+  precioBs : Entero
   estado : EstadoAlmuerzo
 }
 
@@ -61,49 +74,39 @@ class Feriado {
   descripcion : Texto
 }
 
-class LineaDescuento <<value object>> {
-  codigoEmpleado : Texto
-  nombre : Texto
-  tipo : Texto
-  cantidad : Entero
-  precioUnitario : Decimal
-  totalBs : Decimal
+class DescuentoTitular <<calculado>> {
+  totalBs : Entero
 }
 
+class LineaDescuento <<calculado>> {
+  modalidad : OrigenAlmuerzo
+  cantidad : Entero
+  precioUnitarioBs : Entero
+  subtotalBs : Entero
+}
+
+Persona <|-- Empleado
+Persona <|-- Familiar
+Empleado "1" o-- "0..*" Familiar : tiene a cargo >
 Empleado "1" --> "0..1" Autorizacion : tiene >
 Autorizacion --> Rol
+Empleado "1" --> "0..*" Sesion : abre >
+
+Persona "1" --> "0..*" Almuerzo : consume >
+Empleado "1" --> "0..*" Almuerzo : es titular del descuento >
+Persona "1" --> "0..*" Pension : pensionada en >
 Empleado "1" --> "0..*" Pension : solicita >
-Empleado "1" --> "0..*" Almuerzo : registra >
 Pension "0..1" --> "0..*" Almuerzo : genera >
 Almuerzo --> OrigenAlmuerzo
 Almuerzo --> EstadoAlmuerzo
 
-note bottom of Empleado
-  No se da de alta en este sistema (R1b).
-  No guarda contraseña ni «es pensionado».
-end note
+DescuentoTitular "1" *-- "1..*" LineaDescuento
+DescuentoTitular ..> Almuerzo : se calcula desde
+DescuentoTitular ..> Feriado : excluye
 
 note bottom of Feriado
-  Sin asociación a Almuerzo.
-  Un feriado es un día en el que
-  no debe existir un almuerzo confirmado.
-end note
-
-note bottom of LineaDescuento
-  No se persiste.
-  Se calcula al generar el reporte (HU08).
-  La fuente de verdad es Almuerzo.
-end note
-
-note as INV
-  **Invariantes**
-  * Un empleado + una fecha = un almuerzo.
-  * Un empleado + un mes = una pensión.
-  * Esporádico = 18 Bs. Pensión = 15 Bs.
-  * No hay almuerzo confirmado en feriado
-    ni de viernes a domingo.
-  * Solo el estado CONFIRMADO se cobra.
-  * Avisar inasistencia no deja la pensión
-    con menos de 10 confirmados en el mes.
+  Sin asociación con Almuerzo:
+  un feriado significa que ese día
+  no debe haber almuerzo que se cobre.
 end note
 @enduml

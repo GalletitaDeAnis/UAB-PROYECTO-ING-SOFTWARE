@@ -1,118 +1,103 @@
 # Diagrama de clases
 
-El diagrama muestra las entidades que el sistema guarda, sus atributos y las relaciones que salen de las reglas. No es el modelo de pantallas ni el de tablas con cada índice: eso se precisa al implementar, sin cambiar estas multiplicidades.
+Versión alineada con el backlog v2: familiares de primer grado, reserva y pensión nominales, y login con la API empresarial. El diagrama muestra lo que el sistema guarda y lo que calcula, con las multiplicidades que salen de las reglas. Las tablas concretas están en [base-de-datos.md](base-de-datos.md).
 
 ![Diagrama de clases](diagrams/clases.png)
 
-Fuente editable: [diagrams/clases.puml](diagrams/clases.puml).
+Fuente editable: [diagrams/clases.puml](diagrams/clases.puml). Código: [src/dominio/modelo.ts](../src/dominio/modelo.ts) y [src/dominio/reporte.ts](../src/dominio/reporte.ts).
 
 ## Entidades
 
-### Empleado
+### Persona, Empleado y Familiar
 
-Proyección de la base institucional. Este sistema no da de alta personas (R1b, HU01).
+`Persona` es quien consume un almuerzo. Es abstracta: siempre es un `Empleado` o un `Familiar`. La generalización existe porque R11 pide que cada almuerzo y cada pensión sean nominales, y R5 controla el mínimo de 10 por persona, no por familia. Así, `Almuerzo` y `Pension` apuntan a una `Persona` sin importar quién sea.
 
 | Atributo | Para qué está |
 | --- | --- |
-| codigoInstitucional | Identificador con el que la persona ingresa y con el que el reporte se puede cruzar en planilla. |
-| nombreCompleto | Se muestra en la lista del día y en el reporte. |
-| activo | Si la institución lo dio de baja, no ingresa (HU01, criterio 2). |
+| id | Código institucional del empleado o id del familiar en la API empresarial. |
+| nombreCompleto | Lista del día, reporte y consumo. |
+| vigente | Empleado: activo en el sistema empresarial. Familiar: vino en la última lectura de la API. Un familiar no vigente no se puede elegir, pero su historial se conserva. |
+| parentesco (Familiar) | Lo decide el sistema empresarial (S2), no este sistema. |
 
-No tiene contraseña. La credencial, si la base real la pide, la resuelve el adaptador del directorio. No tiene el atributo «es pensionado»: la pensión es de un mes, no de la persona para siempre.
+Las dos son **copias** de la API empresarial (R1b). No hay alta ni contraseña. La copia se actualiza en cada inicio de sesión (HU05 CA3).
+
+`Empleado 1 o-- 0..* Familiar`: un empleado tiene cero o más familiares a cargo, y cada familiar tiene un solo titular. Es agregación, no composición: el familiar existe en el sistema empresarial con independencia del restaurante. El tope diario de R10 sale de esta multiplicidad: `1 + familiares vigentes`.
 
 ### Autorizacion
 
-Dato de este sistema, no de la base institucional. Sirve para que el encargado vea feriados, lista del día y reporte.
+Dato de este sistema, no de la API (pregunta abierta S4). Da el rol de encargado. Un empleado tiene como máximo una. Sin fila, es empleado.
 
-| Atributo | Para qué está |
-| --- | --- |
-| rol | `EMPLEADO` o `ENCARGADO`. Si no hay fila, se trata como empleado. |
+### Sesion
 
-Un empleado tiene como máximo una autorización local.
+La sesión propia del restaurante (HU01 CA5). Guarda el hash del token, nunca el token ni la contraseña, y la última actividad para vencerla a los 30 minutos. Un empleado puede tener varias abiertas (por ejemplo, celular y computadora).
 
 ### Pension
 
-Una pensión activa de una persona para un año y un mes. Si la solicitud se rechaza, no se guarda una pensión «rechazada»: no se crea la fila. Por eso no hay un estado extra.
+La pensión de **una persona** en un año y un mes (HU08, HU09). La pide el empleado titular para sí o para un familiar, y la pensión de cada persona es independiente (S3).
 
 | Atributo | Para qué está |
 | --- | --- |
-| anio, mes | El mes pensionado. Junto con el empleado no se repiten (HU06, criterio 6). |
-| fechaSolicitud | Deja evidencia de que se pidió antes de que empezara el mes. |
+| anio, mes | El mes pensionado. Con la persona, no se repiten (HU08 CA5, HU09 CA5). |
+| solicitadaEl | Evidencia de que se pidió antes de que empezara el mes (HU08 CA4). |
+
+`Pension 0..1 --> 0..* Almuerzo`: al confirmarla se generan los almuerzos del mes (R4). Un almuerzo esporádico no viene de ninguna pensión.
+
+Si la solicitud se rechaza, no se guarda una pensión «rechazada»: no se crea la fila. Por eso no tiene estado.
 
 ### Almuerzo
 
-Un almuerzo de una persona en una fecha. Cubre la reserva esporádica y el día generado por la pensión. Es la unidad que la cocina cuenta y que el reporte cobra.
+Un almuerzo de una persona en una fecha. Cubre la reserva esporádica y el día generado por la pensión. Es lo que la cocina cuenta y lo que el reporte cobra.
 
 | Atributo | Para qué está |
 | --- | --- |
 | fecha | El día de servicio. |
-| origen | `ESPORADICO` o `PENSION`. Define el precio y quién puede cancelar o avisar. |
-| precioBs | 18 o 15, copiado al confirmar. Si el próximo año cambia la tarifa, los meses ya confirmados no se reescriben. |
+| origen | `ESPORADICO` o `PENSION`. Define el precio y si se cancela (HU03) o se avisa (HU10). |
+| precioBs | 18 o 15, copiado al confirmar. Si la tarifa cambia, los meses cerrados no se reescriben. |
 | estado | `CONFIRMADO`, `CANCELADO` o `INASISTENCIA_AVISADA`. |
 
-No hay un estado «asistió» o «no asistió». R7 cobra lo que sigue confirmado. El comedor no marca presencia.
+Tiene **dos** asociaciones distintas:
 
-`CANCELADO` es la reserva esporádica que el empleado anuló a tiempo. `INASISTENCIA_AVISADA` es el día de pensión avisado a tiempo. Los dos dejan de cobrarse, pero solo el segundo entra en la regla del mínimo de 10. Por eso no son el mismo valor.
+- `Persona consume Almuerzo`: a nombre de quién está (R11). Es lo que cuenta para el mínimo de 10.
+- `Empleado es titular del descuento de Almuerzo`: a quién se le descuenta (R8). Se copia al reservar, para que el descuento no cambie si la familia cambia después en la API.
 
-Hay un solo almuerzo por empleado y fecha. Si cancela y vuelve a reservar antes de las 9:00, se actualiza esa misma fila. Así no aparecen dos cobros del mismo día.
+No hay un estado «asistió». R7 cobra lo que sigue confirmado. El comedor no marca presencia.
+
+`CANCELADO` es la reserva esporádica anulada a tiempo. `INASISTENCIA_AVISADA` es el día de pensión avisado a tiempo. Ninguno de los dos se cobra, pero son distintos: solo el segundo entra en la regla del mínimo de 10.
+
+Hay un solo almuerzo por persona y fecha (R2). Cancelar y volver a reservar actualiza el mismo registro.
 
 ### Feriado
 
-Un día de lunes a jueves en el que el restaurante no atiende.
+Un día de lunes a jueves sin servicio (HU07). No hay asociación con `Almuerzo`: el feriado significa que ese día no debe haber un almuerzo cobrable. El cálculo lo excluye aunque el feriado se haya cargado después de confirmar la pensión (HU07 CA2).
 
-| Atributo | Para qué está |
+## Calculados, no guardados
+
+### DescuentoTitular y LineaDescuento
+
+Resultado de HU11 (y de HU12, para un solo titular). Se arma al pedir el reporte o el consumo y se descarta después. Guardarlo aparte duplicaría los almuerzos: si alguien corrige un feriado, el archivo viejo y la base dirían cosas distintas.
+
+| DescuentoTitular | |
 | --- | --- |
-| fecha | El día bloqueado. No se repite. |
-| descripcion | Texto del encargado para reconocer el feriado (por ejemplo, 6 de agosto). |
+| codigoTitular, nombreTitular | A quién se descuenta por planilla. |
+| lineas | Una por persona y modalidad. |
+| totalBs | Suma de las líneas (HU11 CA1: 384 Bs). |
 
-No hay flecha de Feriado a Almuerzo. El feriado significa que ese día no debe existir un almuerzo confirmado. Guardar una clave foránea obligaría a crear el almuerzo para después apuntarlo a un feriado, que es lo contrario de la regla.
-
-### LineaDescuento
-
-No es una tabla. Es el resultado de calcular HU08. Se arma al exportar y se descarta después. Guardarla aparte duplicaría los almuerzos: si alguien corrige un feriado, el archivo viejo y la base dirían cosas distintas. La fuente es `Almuerzo`.
-
-| Atributo | Para qué está |
+| LineaDescuento | |
 | --- | --- |
-| codigoEmpleado, nombre | Columnas que planilla necesita. |
-| tipo | Pensionado o no pensionado en ese mes. |
-| cantidad | Almuerzos que siguen confirmados. |
-| precioUnitario | 15 o 18. |
-| totalBs | cantidad × precioUnitario. |
+| persona, parentesco | Quién consumió. |
+| modalidad | Pensionado o no pensionado. |
+| cantidad | Almuerzos confirmados que no son feriado. |
+| precioUnitarioBs, subtotalBs | 15 o 18, y cantidad × precio. |
 
-En un mismo mes una persona no mezcla los dos precios: o es pensionada de ese mes, o no lo es.
+## Trazabilidad con el backlog
 
-## Relaciones y multiplicidades
-
-| Relación | Multiplicidad | Por qué |
-| --- | --- | --- |
-| Empleado tiene Autorizacion | 1 a 0..1 | La mayoría solo come. El encargado es un empleado con un rol local. |
-| Empleado solicita Pension | 1 a 0..* | Puede no pensionarse nunca, o pensionarse en varios meses. No al revés: una pensión es de una persona. |
-| Empleado registra Almuerzo | 1 a 0..* | Cero si no usa el restaurante (R1, el uso es opcional). Muchos a lo largo de los meses. |
-| Pension genera Almuerzo | 0..1 a 0..* | El almuerzo esporádico no tiene pensión, por eso el 0. Una pensión genera un almuerzo por día de servicio. Un almuerzo pertenece como máximo a una pensión. |
-
-La pensión no «contiene» los almuerzos como único dueño en el sentido de que la lista del día no puede leerlos sin abrir la pensión. La cocina consulta por fecha. Por eso `Almuerzo` se guarda y se busca por sí mismo, y la pensión solo guarda la referencia en los que ella generó.
-
-## Invariantes
-
-Estas condiciones tienen que ser verdad después de cada caso de uso. Las pruebas del Sprint 1 y 2 salen de aquí y de los criterios de aceptación.
-
-- Un empleado y una fecha: un solo almuerzo.
-- Un empleado, un año y un mes: una sola pensión.
-- Si el origen es esporádico, el precio es 18 Bs. Si el origen es pensión, el precio es 15 Bs.
-- No hay almuerzo confirmado en feriado, viernes, sábado o domingo.
-- El reporte suma solo los que están `CONFIRMADO`.
-- Un aviso de inasistencia no deja a la pensión con menos de 10 confirmados en el mes.
-
-## Cómo se lee contra las historias
-
-| Historia | Qué toca del modelo |
+| Clase | Historias |
 | --- | --- |
-| HU01 | Lee `Empleado`. No lo crea. Lee `Autorizacion` para el encargado. |
-| HU02 | Crea o actualiza un `Almuerzo` esporádico. |
-| HU03 | Pasa ese almuerzo a `CANCELADO`. |
-| HU04 | Consulta `Almuerzo` confirmados de una fecha. |
-| HU05 | Crea un `Feriado` y deja sin efecto el almuerzo de ese día. |
-| HU06 | Crea una `Pension` y sus `Almuerzo`. |
-| HU07 | Pasa un almuerzo de pensión a `INASISTENCIA_AVISADA` si el mes no baja de 10. |
-| HU08 | Calcula `LineaDescuento` sin guardarla. |
-| HU09 | Lee los mismos almuerzos que el reporte, para una sola persona. |
+| Persona, Empleado | HU01, HU02, HU04 |
+| Familiar | HU05, HU06, HU09 |
+| Autorizacion | HU01 CA6 |
+| Sesion | HU01 CA5 |
+| Almuerzo | HU02, HU03, HU04, HU06, HU08, HU10 |
+| Pension | HU08, HU09 |
+| Feriado | HU07 |
+| DescuentoTitular, LineaDescuento | HU11, HU12 |
