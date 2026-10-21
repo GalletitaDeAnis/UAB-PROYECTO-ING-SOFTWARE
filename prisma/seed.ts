@@ -1,27 +1,36 @@
 import { PrismaClient } from "@prisma/client";
 
+/**
+ * Datos mínimos para la demo. Empleados y familiares no se siembran: llegan de la API
+ * empresarial en cada inicio de sesión (R1b). Solo se configura el rol de encargado (S4)
+ * y un feriado de ejemplo.
+ */
 const prisma = new PrismaClient();
 
-const empleados = [
-  { codigoInstitucional: "UB-100", nombreCompleto: "Ana Rojas", activo: true },
-  { codigoInstitucional: "UB-101", nombreCompleto: "Carlos Mamani", activo: true },
-  { codigoInstitucional: "UB-102", nombreCompleto: "Laura Quispe", activo: false },
-  { codigoInstitucional: "UB-200", nombreCompleto: "Elena Vargas", activo: true },
-];
+const encargados = (process.env.ENCARGADOS ?? "UB-200")
+  .split(",")
+  .map((codigo) => codigo.trim())
+  .filter(Boolean);
+
+const feriados = [{ fecha: "2026-11-02", descripcion: "Día de Todos los Difuntos" }];
 
 async function main() {
-  for (const empleado of empleados) {
-    await prisma.empleado.upsert({
-      where: { codigoInstitucional: empleado.codigoInstitucional },
-      update: empleado,
-      create: empleado,
+  for (const codigoEmpleado of encargados) {
+    await prisma.autorizacion.upsert({
+      where: { codigoEmpleado },
+      update: { rol: "ENCARGADO" },
+      create: { codigoEmpleado, rol: "ENCARGADO" },
     });
   }
-  await prisma.autorizacion.upsert({
-    where: { codigoEmpleado: "UB-200" },
-    update: { rol: "ENCARGADO" },
-    create: { codigoEmpleado: "UB-200", rol: "ENCARGADO" },
-  });
+  for (const feriado of feriados) {
+    const fecha = new Date(`${feriado.fecha}T00:00:00.000Z`);
+    await prisma.feriado.upsert({
+      where: { fecha },
+      update: { descripcion: feriado.descripcion },
+      create: { fecha, descripcion: feriado.descripcion },
+    });
+  }
+  console.log(`Encargados: ${encargados.join(", ")}. Feriados de ejemplo: ${feriados.length}.`);
 }
 
 main()

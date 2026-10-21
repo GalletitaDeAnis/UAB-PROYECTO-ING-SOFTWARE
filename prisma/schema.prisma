@@ -1,49 +1,114 @@
+// Base del restaurante en PostgreSQL (local o Supabase).
+// Empleados y familiares no se dan de alta aquí: se copian de la API empresarial al iniciar sesión (R1b).
+// El detalle de cada decisión está en entregables/base-de-datos.md.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-model Empleado {
-  codigoInstitucional String         @id
-  nombreCompleto      String
-  activo              Boolean
-  autorizacion        Autorizacion?
-  almuerzos           Almuerzo[]
-  pensiones           Pension[]
+enum Rol {
+  EMPLEADO
+  ENCARGADO
 }
 
+enum TipoPersona {
+  EMPLEADO
+  FAMILIAR
+}
+
+enum OrigenAlmuerzo {
+  ESPORADICO
+  PENSION
+}
+
+enum EstadoAlmuerzo {
+  CONFIRMADO
+  CANCELADO
+  INASISTENCIA_AVISADA
+}
+
+/// Copia mínima de quien consume: el empleado (su propio titular) o un familiar de primer grado.
+model Persona {
+  id             String      @id
+  tipo           TipoPersona
+  nombreCompleto String      @map("nombre_completo")
+  parentesco     String?
+  codigoTitular  String      @map("codigo_titular")
+  vigente        Boolean
+  actualizadaEn  DateTime    @updatedAt @map("actualizada_en") @db.Timestamptz(3)
+
+  titular   Persona    @relation("Titular", fields: [codigoTitular], references: [id])
+  aCargo    Persona[]  @relation("Titular")
+  almuerzos Almuerzo[] @relation("Consume")
+  pensiones Pension[]  @relation("Pensionado")
+
+  @@index([codigoTitular])
+  @@map("persona")
+}
+
+/// Rol de encargado. La API empresarial no lo entrega (S4), así que se configura aquí.
 model Autorizacion {
-  codigoEmpleado String   @id
-  rol            String
-  empleado       Empleado @relation(fields: [codigoEmpleado], references: [codigoInstitucional])
+  codigoEmpleado String @id @map("codigo_empleado")
+  rol            Rol
+
+  @@map("autorizacion")
 }
 
+/// Un almuerzo por persona y por día (R2). Guarda el titular para el descuento por planilla (R8).
 model Almuerzo {
-  codigoEmpleado String
-  fecha          String
-  origen         String
-  precioBs       Int
-  estado         String
-  empleado       Empleado @relation(fields: [codigoEmpleado], references: [codigoInstitucional])
+  personaId     String         @map("persona_id")
+  fecha         DateTime       @db.Date
+  codigoTitular String         @map("codigo_titular")
+  origen        OrigenAlmuerzo
+  precioBs      Int            @map("precio_bs")
+  estado        EstadoAlmuerzo
+  creadoEn      DateTime       @default(now()) @map("creado_en") @db.Timestamptz(3)
+  actualizadoEn DateTime       @updatedAt @map("actualizado_en") @db.Timestamptz(3)
 
-  @@id([codigoEmpleado, fecha])
+  persona Persona @relation("Consume", fields: [personaId], references: [id])
+
+  @@id([personaId, fecha])
+  @@index([fecha, estado])
+  @@index([codigoTitular, fecha])
+  @@map("almuerzo")
+}
+
+/// Pensión nominal de un mes (R3). Sus almuerzos se crean en la misma transacción (R4).
+model Pension {
+  personaId     String   @map("persona_id")
+  anio          Int
+  mes           Int
+  codigoTitular String   @map("codigo_titular")
+  solicitadaEl  DateTime @map("solicitada_el") @db.Date
+
+  persona Persona @relation("Pensionado", fields: [personaId], references: [id])
+
+  @@id([personaId, anio, mes])
+  @@index([codigoTitular, anio, mes])
+  @@map("pension")
 }
 
 model Feriado {
-  fecha       String @id
+  fecha       DateTime @id @db.Date
   descripcion String
+
+  @@map("feriado")
 }
 
-model Pension {
-  codigoEmpleado String
-  anio           Int
-  mes            Int
-  fechaSolicitud String
-  empleado       Empleado @relation(fields: [codigoEmpleado], references: [codigoInstitucional])
+/// Sesión propia del restaurante (HU01 CA5). Se guarda el hash del token, nunca el token.
+model Sesion {
+  tokenHash       String   @id @map("token_hash")
+  codigoEmpleado  String   @map("codigo_empleado")
+  rol             Rol
+  creadaEn        DateTime @default(now()) @map("creada_en") @db.Timestamptz(3)
+  ultimaActividad DateTime @map("ultima_actividad") @db.Timestamptz(3)
 
-  @@id([codigoEmpleado, anio, mes])
+  @@index([codigoEmpleado])
+  @@map("sesion")
 }
