@@ -1,34 +1,32 @@
 import { PrismaClient } from "@prisma/client";
-import { CancelarReserva } from "../aplicacion/cancelarReserva.js";
-import { Ingresar } from "../aplicacion/ingresar.js";
-import { ReservarAlmuerzo } from "../aplicacion/reservarAlmuerzo.js";
-import { VerListaDelDia } from "../aplicacion/verListaDelDia.js";
+import { crearCasosDeUso } from "../aplicacion/casosDeUso.js";
+import type { Configuracion } from "./configuracion.js";
+import { ExportadorExcel, ExportadorPdf } from "./exportadores.js";
 import { RelojDelSistema } from "./relojSistema.js";
 import {
   AlmuerzosPrisma,
   AutorizacionesPrisma,
-  DirectorioPrisma,
   FeriadosPrisma,
   PensionesPrisma,
+  PersonasPrisma,
+  SesionesPrisma,
 } from "./repositoriosPrisma.js";
+import { SistemaEmpresarialHttp } from "./sistemaEmpresarialHttp.js";
+import { TokensAleatorios } from "./tokens.js";
 
-export function crearAplicacion(db = new PrismaClient()) {
-  const reloj = new RelojDelSistema();
-  const directorio = new DirectorioPrisma(db);
-  const autorizaciones = new AutorizacionesPrisma(db);
-  const almuerzos = new AlmuerzosPrisma(db);
-  const feriados = new FeriadosPrisma(db);
-  const pensiones = new PensionesPrisma(db);
-
-  return {
-    db,
-    reloj,
-    feriados,
-    ingresar: new Ingresar(directorio, autorizaciones, almuerzos),
-    reservar: new ReservarAlmuerzo(reloj, directorio, almuerzos, feriados, pensiones),
-    cancelar: new CancelarReserva(reloj, almuerzos),
-    verLista: new VerListaDelDia(autorizaciones, almuerzos, directorio),
-  };
+/** Raíz de composición: el único lugar que conoce las clases concretas. */
+export function crearAplicacion(config: Configuracion, db = new PrismaClient()) {
+  const casos = crearCasosDeUso({
+    reloj: new RelojDelSistema(),
+    empresarial: new SistemaEmpresarialHttp({ urlBase: config.empresarialUrl, apiKey: config.empresarialApiKey }),
+    personas: new PersonasPrisma(db),
+    autorizaciones: new AutorizacionesPrisma(db),
+    almuerzos: new AlmuerzosPrisma(db),
+    feriados: new FeriadosPrisma(db),
+    pensiones: new PensionesPrisma(db),
+    sesiones: new SesionesPrisma(db),
+    tokens: new TokensAleatorios(),
+    exportadores: [new ExportadorExcel(), new ExportadorPdf()],
+  });
+  return { db, casos };
 }
-
-export type Aplicacion = ReturnType<typeof crearAplicacion>;

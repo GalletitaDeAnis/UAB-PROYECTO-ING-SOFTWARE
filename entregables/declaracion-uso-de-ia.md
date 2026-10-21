@@ -27,3 +27,28 @@ Si una regla, un actor o una estimación no les convence, se cambia en el pull r
 ## Qué no generó la IA
 
 No hay todavía pensión, feriados en pantalla, reporte, consumo del mes ni actas de retrospectiva. Esos artefactos se declaran de nuevo cuando existan.
+
+## Segunda parte: base de datos y API (backlog v2)
+
+Fecha: 21 de octubre de 2026.  
+Herramienta: Claude Code (modelo Claude Opus 5.5), usada por el integrante a cargo de API y base de datos.  
+Material de partida: los documentos v2 del equipo (backlog, casos de uso y arquitectura) y la rúbrica.
+
+### Qué hizo la asistencia
+
+- Pasó el dominio y los casos de uso a la v2: personas (empleado y familiares), reserva y pensión nominales, tope diario, mínimo de 10 por persona, inasistencias, reporte por titular y consumo (HU01 a HU12).
+- Diseñó el esquema de PostgreSQL, la migración con restricciones `CHECK` y RLS para Supabase, y los repositorios Prisma.
+- Escribió el cliente HTTP de la API empresarial (timeout de 5 s) y un simulador de esa API con usuarios de prueba.
+- Escribió la API GraphQL, la sesión con token y la descarga del reporte en Excel y PDF.
+- Escribió las pruebas por criterio, de integración (GraphQL, HTTP y PostgreSQL) y la configuración de cobertura.
+- Pasó a Markdown el backlog y los casos de uso del equipo, redibujó los diagramas y escribió la revisión de los documentos.
+
+### Cómo se verificó
+
+- `npm run typecheck` sin errores y `npm test` en verde, con cobertura sobre el 80 %.
+- La migración se aplicó con `prisma migrate deploy` sobre un PostgreSQL y se comprobaron las restricciones y el RLS con un rol `anon` igual al de Supabase.
+- La API se recorrió por HTTP con los usuarios del simulador.
+
+### Qué falta del integrante
+
+Leer y poder explicar sin el chat: `src/dominio/`, `src/aplicacion/pensionar.ts`, `avisarInasistencia.ts`, `prisma/schema.prisma`, la migración, `resolvers.ts` y `sistemaEmpresarialHttp.ts`. En particular: por qué Supabase no se consume directo, qué hace el RLS, por qué la sesión es un token en la base y no un JWT, y qué se cambia cuando llegue la API real de TI.

@@ -39,6 +39,40 @@ export function admiteCambio(ahora: Momento, fechaServicio: string): boolean {
   return ahora.minutos < minutosDe(9, 0);
 }
 
+/** Acepta solo fechas de calendario reales con forma AAAA-MM-DD. */
+export function esFechaValida(texto: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return false;
+  const [anio, mes, dia] = texto.split("-").map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  return fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia;
+}
+
+export function mesSiguiente(fecha: string): { anio: number; mes: number } {
+  const { anio, mes } = anioMes(fecha);
+  return mes === 12 ? { anio: anio + 1, mes: 1 } : { anio, mes: mes + 1 };
+}
+
+/** R3 y HU08: la pensión se pide para el mes siguiente; el día 1 de ese mes ya es tarde. */
+export function esMesSiguiente(ahora: Momento, anio: number, mes: number): boolean {
+  const siguiente = mesSiguiente(ahora.fecha);
+  return siguiente.anio === anio && siguiente.mes === mes;
+}
+
+export function diasDelMes(anio: number, mes: number): string[] {
+  const total = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+  const prefijo = `${anio}-${String(mes).padStart(2, "0")}`;
+  return Array.from({ length: total }, (_, i) => `${prefijo}-${String(i + 1).padStart(2, "0")}`);
+}
+
+/** R4: lunes a jueves del mes, sin feriados. */
+export function diasDeServicio(
+  anio: number,
+  mes: number,
+  esFeriado: (fecha: string) => boolean,
+): string[] {
+  return diasDelMes(anio, mes).filter((fecha) => esLunesAJueves(fecha) && !esFeriado(fecha));
+}
+
 export function sugerirFechaReserva(
   ahora: Momento,
   esFeriado: (fecha: string) => boolean,

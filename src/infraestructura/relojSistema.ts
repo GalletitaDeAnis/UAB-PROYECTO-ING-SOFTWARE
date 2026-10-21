@@ -8,6 +8,11 @@ export class RelojDelSistema implements Reloj {
     if (fijo) return momentoFijo(fijo);
     return momentoEnLaPaz(new Date());
   }
+
+  /** La inactividad de la sesión se mide con la hora real, aunque RELOJ_FIJO mueva la regla de las 9:00. */
+  instante(): number {
+    return Date.now();
+  }
 }
 
 function momentoFijo(texto: string): Momento {

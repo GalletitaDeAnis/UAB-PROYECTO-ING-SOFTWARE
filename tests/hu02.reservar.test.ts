@@ -1,163 +1,108 @@
 import { describe, expect, it } from "vitest";
-import { ReservarAlmuerzo } from "../src/aplicacion/reservarAlmuerzo.js";
-import { momento } from "../src/dominio/tiempo.js";
-import {
-  AlmuerzosEnMemoria,
-  ana,
-  DirectorioEnMemoria,
-  FeriadosEnMemoria,
-  PensionesEnMemoria,
-  relojFijo,
-} from "./fakes.js";
+import { ana, comoUsuario, dePension, escenario, esporadico, relojEn } from "./fakes.js";
 
-function reservar(opciones: {
-  fechaReloj: string;
-  hora: number;
-  minuto: number;
-  almuerzos?: AlmuerzosEnMemoria;
-  feriados?: FeriadosEnMemoria;
-  pensiones?: PensionesEnMemoria;
-}) {
-  const almuerzos = opciones.almuerzos ?? new AlmuerzosEnMemoria();
-  const caso = new ReservarAlmuerzo(
-    relojFijo(momento(opciones.fechaReloj, opciones.hora, opciones.minuto)),
-    new DirectorioEnMemoria([ana]),
-    almuerzos,
-    opciones.feriados ?? new FeriadosEnMemoria(),
-    opciones.pensiones ?? new PensionesEnMemoria(),
-  );
-  return { caso, almuerzos };
-}
+const yo = comoUsuario(ana);
 
-describe("HU02 reservar almuerzo", () => {
-  it("CA1 el martes a las 8:30 queda confirmado a 18 Bs", async () => {
-    const { caso, almuerzos } = reservar({ fechaReloj: "2026-10-06", hora: 8, minuto: 30 });
+describe("HU02 reservar mi almuerzo (uso esporádico)", () => {
+  it("CA1 el martes a las 8:30 queda confirmado a su nombre a 18 Bs", async () => {
+    const e = escenario({ reloj: relojEn("2026-10-06", 8, 30) });
 
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-06");
+    const resultado = await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-06");
 
     expect(resultado.ok).toBe(true);
-    expect(almuerzos.guardados).toEqual([
-      {
-        codigoEmpleado: "UB-100",
-        fecha: "2026-10-06",
-        origen: "ESPORADICO",
-        precioBs: 18,
-        estado: "CONFIRMADO",
-      },
+    expect(e.almuerzos.guardados).toEqual([esporadico("UB-100", "UB-100", "2026-10-06")]);
+  });
+
+  it("CA1 aparece en mis reservas", async () => {
+    const e = escenario();
+    await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-06");
+
+    const mias = await e.casos.verMisAlmuerzos.ejecutar(yo, 2026, 10);
+
+    expect(mias.ok && mias.valor.map((a) => [a.fecha, a.nombrePersona, a.precioBs])).toEqual([
+      ["2026-10-06", "Ana Rojas", 18],
     ]);
   });
 
-  it("CA2 a las 9:00 del mismo día ya no se reserva", async () => {
-    const { caso, almuerzos } = reservar({ fechaReloj: "2026-10-06", hora: 9, minuto: 0 });
+  it("CA2 a las 9:00 en punto ya no se reserva para hoy (borde)", async () => {
+    const e = escenario({ reloj: relojEn("2026-10-06", 9, 0) });
 
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-06");
+    const resultado = await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-06");
 
     expect(resultado.ok).toBe(false);
     if (resultado.ok) return;
     expect(resultado.mensaje).toContain("9:00");
-    expect(almuerzos.guardados).toHaveLength(0);
+    expect(e.almuerzos.guardados).toHaveLength(0);
+  });
+
+  it("CA2 a las 8:59 todavía se reserva (borde)", async () => {
+    const e = escenario({ reloj: relojEn("2026-10-06", 8, 59) });
+
+    expect((await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-06")).ok).toBe(true);
+  });
+
+  it("CA2 después de las 9:00 se puede reservar para un día siguiente", async () => {
+    const e = escenario({ reloj: relojEn("2026-10-06", 15, 0) });
+
+    expect((await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-07")).ok).toBe(true);
   });
 
   it("CA3 viernes, sábado y domingo se rechazan", async () => {
-    const { caso } = reservar({ fechaReloj: "2026-10-07", hora: 8, minuto: 0 });
+    const e = escenario({ reloj: relojEn("2026-10-07", 8, 0) });
 
     for (const fecha of ["2026-10-09", "2026-10-10", "2026-10-11"]) {
-      const resultado = await caso.ejecutar(ana.codigoInstitucional, fecha);
+      const resultado = await e.casos.reservar.ejecutar(yo, "UB-100", fecha);
       expect(resultado.ok).toBe(false);
-      if (resultado.ok) return;
-      expect(resultado.mensaje).toContain("lunes a jueves");
+      if (!resultado.ok) expect(resultado.mensaje).toContain("lunes a jueves");
     }
+    expect(e.almuerzos.guardados).toHaveLength(0);
   });
 
-  it("CA4 no duplica una reserva del mismo día", async () => {
-    const almuerzos = new AlmuerzosEnMemoria([
-      {
-        codigoEmpleado: ana.codigoInstitucional,
-        fecha: "2026-10-08",
-        origen: "ESPORADICO",
-        precioBs: 18,
-        estado: "CONFIRMADO",
-      },
-    ]);
-    const { caso } = reservar({ fechaReloj: "2026-10-07", hora: 8, minuto: 0, almuerzos });
+  it("CA4 una segunda reserva para el mismo día no se duplica", async () => {
+    const e = escenario({ almuerzos: [esporadico("UB-100", "UB-100", "2026-10-06")] });
 
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-08");
+    const resultado = await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-06");
 
     expect(resultado.ok).toBe(false);
-    expect(almuerzos.guardados).toHaveLength(1);
+    expect(e.almuerzos.guardados).toHaveLength(1);
   });
 
-  it("CA5 el lunes se puede reservar el jueves, porque el límite es el del jueves", async () => {
-    const { caso, almuerzos } = reservar({ fechaReloj: "2026-10-05", hora: 18, minuto: 0 });
+  it("CA4 después de cancelar se puede volver a reservar el mismo día", async () => {
+    const e = escenario({ almuerzos: [esporadico("UB-100", "UB-100", "2026-10-06", "CANCELADO")] });
 
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-08");
+    const resultado = await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-06");
 
     expect(resultado.ok).toBe(true);
-    expect(almuerzos.guardados[0]?.estado).toBe("CONFIRMADO");
+    expect(e.almuerzos.de("UB-100")).toEqual([esporadico("UB-100", "UB-100", "2026-10-06")]);
   });
 
-  it("CA6 una fecha ya pasada se rechaza", async () => {
-    const { caso, almuerzos } = reservar({ fechaReloj: "2026-10-07", hora: 8, minuto: 0 });
+  it("un feriado, un día pasado o una fecha inválida no se reservan", async () => {
+    const e = escenario({ feriados: [{ fecha: "2026-10-07", descripcion: "Prueba" }] });
 
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-06");
-
-    expect(resultado.ok).toBe(false);
-    expect(almuerzos.guardados).toHaveLength(0);
+    for (const fecha of ["2026-10-07", "2026-10-05", "2026-02-30", "mañana"]) {
+      expect((await e.casos.reservar.ejecutar(yo, "UB-100", fecha)).ok).toBe(false);
+    }
+    expect(e.almuerzos.guardados).toHaveLength(0);
   });
 
-  it("CA7 un feriado no se reserva", async () => {
-    const { caso, almuerzos } = reservar({
-      fechaReloj: "2026-10-07",
-      hora: 8,
-      minuto: 0,
-      feriados: new FeriadosEnMemoria([{ fecha: "2026-10-08", descripcion: "Feriado de prueba" }]),
+  it("HU08 CA6 un pensionado no agrega una reserva esporádica en su mes", async () => {
+    const e = escenario({
+      almuerzos: [dePension("UB-100", "UB-100", "2026-10-06")],
+      pensiones: [{ personaId: "UB-100", codigoTitular: "UB-100", anio: 2026, mes: 10, solicitadaEl: "2026-09-20" }],
     });
 
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-08");
+    const resultado = await e.casos.reservar.ejecutar(yo, "UB-100", "2026-10-07");
 
     expect(resultado.ok).toBe(false);
-    if (resultado.ok) return;
-    expect(resultado.mensaje).toContain("feriado");
-    expect(almuerzos.guardados).toHaveLength(0);
+    if (!resultado.ok) expect(resultado.mensaje).toContain("pensionado");
   });
 
-  it("CA8 un pensionado de ese mes no agrega una reserva esporádica", async () => {
-    const { caso, almuerzos } = reservar({
-      fechaReloj: "2026-10-07",
-      hora: 8,
-      minuto: 0,
-      pensiones: new PensionesEnMemoria([
-        {
-          codigoEmpleado: ana.codigoInstitucional,
-          anio: 2026,
-          mes: 10,
-          fechaSolicitud: "2026-09-30",
-        },
-      ]),
-    });
+  it("no se puede reservar a nombre de alguien que no está a cargo", async () => {
+    const e = escenario();
 
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-08");
+    const resultado = await e.casos.reservar.ejecutar(yo, "UB-101", "2026-10-06");
 
     expect(resultado.ok).toBe(false);
-    expect(almuerzos.guardados).toHaveLength(0);
-  });
-
-  it("si canceló a tiempo, puede volver a reservar el mismo día antes de las 9:00", async () => {
-    const almuerzos = new AlmuerzosEnMemoria([
-      {
-        codigoEmpleado: ana.codigoInstitucional,
-        fecha: "2026-10-08",
-        origen: "ESPORADICO",
-        precioBs: 18,
-        estado: "CANCELADO",
-      },
-    ]);
-    const { caso } = reservar({ fechaReloj: "2026-10-07", hora: 8, minuto: 0, almuerzos });
-
-    const resultado = await caso.ejecutar(ana.codigoInstitucional, "2026-10-08");
-
-    expect(resultado.ok).toBe(true);
-    expect(almuerzos.guardados).toHaveLength(1);
-    expect(almuerzos.guardados[0]?.estado).toBe("CONFIRMADO");
+    expect(e.almuerzos.guardados).toHaveLength(0);
   });
 });
