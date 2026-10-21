@@ -132,7 +132,7 @@ npm run preparar                   # genera el cliente, aplica la migración y s
 1. Crear el proyecto en supabase.com (región São Paulo, la más cercana a Bolivia). Guardar la contraseña de la base que pide al crearlo.
 2. En **Project Settings → Database → Connection string**:
    - **Transaction pooler** (puerto 6543) → `DATABASE_URL`, agregando `?pgbouncer=true` al final;
-   - **Session pooler** (puerto 5432) → `DIRECT_URL`. Prisma lo usa para las migraciones.
+   - **Session pooler** (puerto 5432) → `DIRECT_URL`. Prisma lo usa para las migraciones. No usar «Direct connection» (`db.xxx.supabase.co`): en el plan gratuito es solo IPv6 y falla con `P1001: Can't reach database server`.
 3. Poner las dos en el `.env` del servidor y correr `npm run preparar`.
 4. En **Table Editor** tienen que aparecer las 6 tablas con el candado de RLS activo.
 
