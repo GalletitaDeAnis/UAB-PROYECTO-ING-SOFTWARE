@@ -1,55 +1,61 @@
-import { cuentaParaCobro, MINIMO_ALMUERZOS_PENSION, type Almuerzo, type Usuario } from "../dominio/modelo.js";
+import { cuentaParaCobro, minimoDelMes, nombreCompleto, type Reserva, type Usuario } from "../dominio/modelo.js";
 import {
   fallo,
   ok,
-  type AlmuerzoRepositorio,
-  type FeriadoRepositorio,
+  type MenuRepositorio,
   type PersonaRepositorio,
   type Reloj,
+  type ReservaRepositorio,
   type Resultado,
 } from "../dominio/puertos.js";
 import { admiteCambio, anioMes } from "../dominio/tiempo.js";
-import { personaACargo } from "./comun.js";
+import { personaACargo, sinPermiso } from "./comun.js";
 
 export type AvisoRegistrado = {
-  almuerzo: Almuerzo;
-  almuerzosRestantes: number;
+  reserva: Reserva;
+  programadosRestantes: number;
+  minimo: number;
 };
 
-/** HU10: libera un día de una sola persona pensionada, sin bajar de 10 en el mes (R5, R6). */
+/** Almuerzos de pensión que siguen confirmados para esa persona en el mes. */
+export function programados(reservas: Reserva[]): number {
+  return reservas.filter((reserva) => reserva.modalidad === "PENSIONADO" && cuentaParaCobro(reserva)).length;
+}
+
+/** HU08: libera un día de una sola persona pensionada, sin bajar de su mínimo (R11, R12). */
 export class AvisarInasistencia {
   constructor(
     private readonly reloj: Reloj,
     private readonly personas: PersonaRepositorio,
-    private readonly almuerzos: AlmuerzoRepositorio,
-    private readonly feriados: FeriadoRepositorio,
+    private readonly reservas: ReservaRepositorio,
+    private readonly menus: MenuRepositorio,
   ) {}
 
   async ejecutar(usuario: Usuario, personaId: string, fecha: string): Promise<Resultado<AvisoRegistrado>> {
+    const denegado = sinPermiso(usuario, "EMPLEADO");
+    if (denegado) return fallo(denegado);
     const persona = await personaACargo(this.personas, usuario, personaId);
     if (!persona.ok) return persona;
 
-    const almuerzo = await this.almuerzos.obtener(personaId, fecha);
-    if (!almuerzo || almuerzo.origen !== "PENSION" || almuerzo.estado !== "CONFIRMADO") {
+    const reserva = await this.reservas.obtener(personaId, fecha);
+    if (!reserva || reserva.modalidad !== "PENSIONADO" || reserva.estado !== "CONFIRMADA") {
       return fallo("Esa persona no tiene un almuerzo de pensión confirmado ese día.");
     }
     if (!admiteCambio(this.reloj.ahora(), fecha)) {
-      return fallo("Ya son las 9:00. No se puede avisar y ese almuerzo se cobra.");
+      return fallo("Ya son las 9:00. No se puede avisar y el almuerzo se cobrará.");
     }
 
     const { anio, mes } = anioMes(fecha);
-    const feriados = new Set((await this.feriados.listar(anio, mes)).map((feriado) => feriado.fecha));
-    const queCuentan = (await this.almuerzos.listarDeLaPersona(personaId, anio, mes)).filter(
-      (otro) => otro.origen === "PENSION" && cuentaParaCobro(otro, (dia) => feriados.has(dia)),
-    ).length;
-    if (queCuentan - 1 < MINIMO_ALMUERZOS_PENSION) {
+    const minimo = minimoDelMes((await this.menus.diasDelMes(anio, mes)).length);
+    const actuales = programados(await this.reservas.listarDeLaPersona(personaId, anio, mes));
+    if (actuales - 1 < minimo) {
       return fallo(
-        `${persona.valor.nombreCompleto} tiene ${queCuentan} almuerzos en el mes. Con otro aviso bajaría del mínimo de ${MINIMO_ALMUERZOS_PENSION}.`,
+        `${nombreCompleto(persona.valor)} tiene ${actuales} almuerzos programados en el mes y su mínimo es ${minimo}. Con otro aviso quedaría por debajo.`,
       );
     }
 
-    const avisado: Almuerzo = { ...almuerzo, estado: "INASISTENCIA_AVISADA" };
-    await this.almuerzos.guardar(avisado);
-    return ok({ almuerzo: avisado, almuerzosRestantes: queCuentan - 1 });
+    const avisada: Reserva = { ...reserva, estado: "INASISTENCIA_AVISADA" };
+    await this.reservas.guardar(avisada);
+    return ok({ reserva: avisada, programadosRestantes: actuales - 1, minimo });
   }
 }

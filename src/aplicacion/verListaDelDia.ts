@@ -1,69 +1,68 @@
-import type { OrigenAlmuerzo, TipoPersona, Usuario } from "../dominio/modelo.js";
+import { nombreCompleto, type Modalidad, type Parentesco, type TipoPersona, type Usuario } from "../dominio/modelo.js";
 import {
   fallo,
   ok,
-  type AlmuerzoRepositorio,
-  type FeriadoRepositorio,
+  type MenuRepositorio,
   type PersonaRepositorio,
+  type ReservaRepositorio,
   type Resultado,
 } from "../dominio/puertos.js";
 import { esFechaValida } from "../dominio/tiempo.js";
-import { esEncargado, SOLO_ENCARGADO } from "./comun.js";
+import { sinPermiso } from "./comun.js";
 
 export type FilaDelDia = {
   personaId: string;
   nombre: string;
   tipoPersona: TipoPersona;
-  parentesco: string | null;
-  codigoTitular: string;
+  parentesco: Parentesco | null;
+  titularId: string;
   nombreTitular: string;
-  modalidad: OrigenAlmuerzo;
+  modalidad: Modalidad;
 };
 
 export type ListaDelDia = {
   fecha: string;
-  esFeriado: boolean;
+  /** HU06 CA3: sin menú publicado no hay atención y el total es cero. */
+  sinAtencion: boolean;
+  menu: string | null;
   total: number;
   filas: FilaDelDia[];
 };
 
-/** HU04: lo confirmado del día, venga de reserva o de pensión. Lo cancelado y lo avisado no aparece. */
+/** HU06: lo confirmado del día, venga de reserva o de pensión. Lo cancelado y lo avisado no aparece. */
 export class VerListaDelDia {
   constructor(
-    private readonly almuerzos: AlmuerzoRepositorio,
+    private readonly reservas: ReservaRepositorio,
     private readonly personas: PersonaRepositorio,
-    private readonly feriados: FeriadoRepositorio,
+    private readonly menus: MenuRepositorio,
   ) {}
 
   async ejecutar(usuario: Usuario, fecha: string): Promise<Resultado<ListaDelDia>> {
-    if (!esEncargado(usuario)) return fallo(SOLO_ENCARGADO);
+    const denegado = sinPermiso(usuario, "ADMINISTRADOR");
+    if (denegado) return fallo(denegado);
     if (!esFechaValida(fecha)) return fallo("La fecha no es válida.");
 
-    if (await this.feriados.esFeriado(fecha)) {
-      return ok({ fecha, esFeriado: true, total: 0, filas: [] });
-    }
+    const menu = await this.menus.obtenerDia(fecha);
+    if (!menu) return ok({ fecha, sinAtencion: true, menu: null, total: 0, filas: [] });
 
-    const confirmados = await this.almuerzos.listarConfirmados(fecha);
-    const ids = new Set<string>();
-    for (const almuerzo of confirmados) {
-      ids.add(almuerzo.personaId);
-      ids.add(almuerzo.codigoTitular);
-    }
+    const confirmadas = await this.reservas.listarConfirmadas(fecha);
+    const ids = new Set(confirmadas.flatMap((reserva) => [reserva.personaId, reserva.titularId]));
     const personas = new Map((await this.personas.obtenerVarias([...ids])).map((p) => [p.id, p]));
 
-    const filas: FilaDelDia[] = confirmados.map((almuerzo) => {
-      const persona = personas.get(almuerzo.personaId);
+    const filas: FilaDelDia[] = confirmadas.map((reserva) => {
+      const persona = personas.get(reserva.personaId);
+      const titular = personas.get(reserva.titularId);
       return {
-        personaId: almuerzo.personaId,
-        nombre: persona?.nombreCompleto ?? almuerzo.personaId,
+        personaId: reserva.personaId,
+        nombre: persona ? nombreCompleto(persona) : reserva.personaId,
         tipoPersona: persona?.tipo ?? "FAMILIAR",
         parentesco: persona?.parentesco ?? null,
-        codigoTitular: almuerzo.codigoTitular,
-        nombreTitular: personas.get(almuerzo.codigoTitular)?.nombreCompleto ?? almuerzo.codigoTitular,
-        modalidad: almuerzo.origen,
+        titularId: reserva.titularId,
+        nombreTitular: titular ? nombreCompleto(titular) : reserva.titularId,
+        modalidad: reserva.modalidad,
       };
     });
     filas.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-    return ok({ fecha, esFeriado: false, total: filas.length, filas });
+    return ok({ fecha, sinAtencion: false, menu: menu.descripcion, total: filas.length, filas });
   }
 }

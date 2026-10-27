@@ -2,15 +2,15 @@ import type { Usuario } from "../dominio/modelo.js";
 import {
   fallo,
   ok,
-  type AlmuerzoRepositorio,
+  type CuentaRepositorio,
   type ExportadorReporte,
-  type FeriadoRepositorio,
   type FormatoReporte,
   type PersonaRepositorio,
+  type ReservaRepositorio,
   type Resultado,
 } from "../dominio/puertos.js";
-import { calcularDescuentos, type DescuentoTitular } from "../dominio/reporte.js";
-import { esEncargado, mesValido, SOLO_ENCARGADO } from "./comun.js";
+import { calcularDescuentos, type DescuentoTitular, type Titular } from "../dominio/reporte.js";
+import { mesValido, sinPermiso } from "./comun.js";
 
 export type ReporteMensual = {
   anio: number;
@@ -19,26 +19,42 @@ export type ReporteMensual = {
   totalBs: number;
 };
 
-/** HU11 / CU11: el reporte se arma cada vez desde los almuerzos. No hay tabla de reporte. */
+/**
+ * HU10: el reporte se arma cada vez desde las reservas; no hay tabla de reporte.
+ * Entran todos los usuarios empleados activos (CA5) y, además, cualquier titular con consumo
+ * en el mes aunque después lo hayan dado de baja.
+ */
 export class GenerarReporteMensual {
   constructor(
-    private readonly almuerzos: AlmuerzoRepositorio,
+    private readonly reservas: ReservaRepositorio,
     private readonly personas: PersonaRepositorio,
-    private readonly feriados: FeriadoRepositorio,
+    private readonly cuentas: CuentaRepositorio,
   ) {}
 
   async ejecutar(usuario: Usuario, anio: number, mes: number): Promise<Resultado<ReporteMensual>> {
-    if (!esEncargado(usuario)) return fallo(SOLO_ENCARGADO);
+    const denegado = sinPermiso(usuario, "ADMINISTRADOR");
+    if (denegado) return fallo(denegado);
     if (!mesValido(anio, mes)) return fallo("El mes no es válido.");
 
-    const almuerzos = await this.almuerzos.listarDelMes(anio, mes);
-    const feriados = new Set((await this.feriados.listar(anio, mes)).map((feriado) => feriado.fecha));
-    const ids = new Set(almuerzos.flatMap((almuerzo) => [almuerzo.personaId, almuerzo.codigoTitular]));
+    const reservas = await this.reservas.listarDelMes(anio, mes);
+    const cuentas = await this.cuentas.listar();
+    const ids = new Set([
+      ...cuentas.map((cuenta) => cuenta.personaId),
+      ...reservas.flatMap((reserva) => [reserva.personaId, reserva.titularId]),
+    ]);
     const personas = new Map((await this.personas.obtenerVarias([...ids])).map((p) => [p.id, p]));
 
-    const titulares = calcularDescuentos(almuerzos, personas, (fecha) => feriados.has(fecha));
-    const totalBs = titulares.reduce((suma, titular) => suma + titular.totalBs, 0);
-    return ok({ anio, mes, titulares, totalBs });
+    const conConsumo = new Set(reservas.filter((r) => r.estado === "CONFIRMADA").map((r) => r.titularId));
+    const titulares: Titular[] = cuentas.flatMap((cuenta) => {
+      const persona = personas.get(cuenta.personaId);
+      if (!persona) return [];
+      const incluir = (cuenta.tipo === "EMPLEADO" && persona.activo) || conConsumo.has(persona.id);
+      return incluir ? [{ persona, codigoEmpleado: cuenta.codigoEmpleado }] : [];
+    });
+
+    const descuentos = calcularDescuentos(reservas, personas, titulares);
+    const totalBs = descuentos.reduce((suma, titular) => suma + titular.totalBs, 0);
+    return ok({ anio, mes, titulares: descuentos, totalBs });
   }
 }
 
@@ -48,7 +64,7 @@ export type ArchivoExportado = {
   contenido: Uint8Array;
 };
 
-/** CU12 «extend» de CU11: se exporta solo si el encargado lo pide, con los mismos datos de pantalla. */
+/** HU10 CA3: se exporta lo mismo que se ve en pantalla, en Excel o en PDF. */
 export class ExportarReporteMensual {
   constructor(
     private readonly generar: GenerarReporteMensual,

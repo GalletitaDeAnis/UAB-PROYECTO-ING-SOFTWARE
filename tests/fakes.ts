@@ -1,33 +1,34 @@
 import { crearCasosDeUso, type Dependencias } from "../src/aplicacion/casosDeUso.js";
-import {
-  personaDelEmpleado,
-  personaDelFamiliar,
-  type Almuerzo,
-  type Empleado,
-  type Familiar,
-  type Feriado,
-  type Pension,
-  type Persona,
-  type Rol,
-  type Usuario,
+import type {
+  Cuenta,
+  DatosPersonales,
+  MenuDia,
+  MenuSemanal,
+  Parentesco,
+  Pension,
+  Persona,
+  Reserva,
+  TipoUsuario,
+  Usuario,
 } from "../src/dominio/modelo.js";
-import {
-  SistemaEmpresarialNoDisponible,
-  type AlmuerzoRepositorio,
-  type Autenticacion,
-  type AutorizacionRepositorio,
-  type ExportadorReporte,
-  type FeriadoRepositorio,
-  type GeneradorDeTokens,
-  type PensionRepositorio,
-  type PersonaRepositorio,
-  type Reloj,
-  type SesionGuardada,
-  type SesionRepositorio,
-  type SistemaEmpresarial,
+import type {
+  CifradorDeContrasenas,
+  CuentaRepositorio,
+  ExportadorReporte,
+  GeneradorDeTokens,
+  MenuRepositorio,
+  NuevaCuenta,
+  NuevoFamiliar,
+  PensionRepositorio,
+  PersonaRepositorio,
+  Reloj,
+  ReservaRepositorio,
+  SesionGuardada,
+  SesionRepositorio,
+  UsuarioRegistrado,
 } from "../src/dominio/puertos.js";
 import type { DescuentoTitular } from "../src/dominio/reporte.js";
-import { anioMes, momento, type Momento } from "../src/dominio/tiempo.js";
+import { anioMes, lunesAJuevesDe, momento, type Momento } from "../src/dominio/tiempo.js";
 
 /** Reloj controlado por la prueba: la regla de las 9:00 y los 30 minutos no dependen de la hora real. */
 export class RelojDePrueba implements Reloj {
@@ -56,42 +57,63 @@ export function relojEn(fecha: string, hora: number, minuto: number): RelojDePru
   return new RelojDePrueba(momento(fecha, hora, minuto));
 }
 
-type Cuenta = { usuario: string; contrasena: string; empleado: Empleado; familiares: Familiar[] };
+const delMes = (fecha: string, anio: number, mes: number) => {
+  const periodo = anioMes(fecha);
+  return periodo.anio === anio && periodo.mes === mes;
+};
 
-/** Doble del sistema empresarial. `caido` simula la API sin respuesta en 5 s (HU01 CA4). */
-export class EmpresarialEnMemoria implements SistemaEmpresarial {
-  caido = false;
-  readonly llamadas: string[] = [];
+export class ReservasEnMemoria implements ReservaRepositorio {
+  readonly guardadas: Reserva[];
 
-  constructor(readonly cuentas: Cuenta[]) {}
-
-  private revisar(llamada: string): void {
-    this.llamadas.push(llamada);
-    if (this.caido) throw new SistemaEmpresarialNoDisponible("sin respuesta en 5000 ms");
+  constructor(iniciales: Reserva[] = []) {
+    this.guardadas = iniciales.map((reserva) => ({ ...reserva }));
   }
 
-  async autenticar(usuario: string, contrasena: string): Promise<Autenticacion> {
-    this.revisar(`autenticar:${usuario}`);
-    const cuenta = this.cuentas.find((c) => c.usuario === usuario && c.contrasena === contrasena);
-    return cuenta ? { valida: true, codigoInstitucional: cuenta.empleado.codigoInstitucional } : { valida: false };
+  async obtener(personaId: string, fecha: string): Promise<Reserva | null> {
+    const reserva = this.guardadas.find((r) => r.personaId === personaId && r.fecha === fecha);
+    return reserva ? { ...reserva } : null;
   }
 
-  async obtenerEmpleado(codigo: string): Promise<Empleado | null> {
-    this.revisar(`empleado:${codigo}`);
-    return this.cuentas.find((c) => c.empleado.codigoInstitucional === codigo)?.empleado ?? null;
+  async guardar(reserva: Reserva): Promise<void> {
+    const indice = this.guardadas.findIndex((r) => r.personaId === reserva.personaId && r.fecha === reserva.fecha);
+    if (indice >= 0) this.guardadas[indice] = { ...reserva };
+    else this.guardadas.push({ ...reserva });
   }
 
-  async obtenerFamiliares(codigo: string): Promise<Familiar[]> {
-    this.revisar(`familiares:${codigo}`);
-    return this.cuentas.find((c) => c.empleado.codigoInstitucional === codigo)?.familiares ?? [];
+  async listarDelTitular(titularId: string, anio: number, mes: number): Promise<Reserva[]> {
+    return this.guardadas.filter((r) => r.titularId === titularId && delMes(r.fecha, anio, mes)).map((r) => ({ ...r }));
+  }
+
+  async listarDeLaPersona(personaId: string, anio: number, mes: number): Promise<Reserva[]> {
+    return this.guardadas.filter((r) => r.personaId === personaId && delMes(r.fecha, anio, mes)).map((r) => ({ ...r }));
+  }
+
+  async listarConfirmadas(fecha: string): Promise<Reserva[]> {
+    return this.guardadas.filter((r) => r.fecha === fecha && r.estado === "CONFIRMADA").map((r) => ({ ...r }));
+  }
+
+  async listarDelMes(anio: number, mes: number): Promise<Reserva[]> {
+    return this.guardadas.filter((r) => delMes(r.fecha, anio, mes)).map((r) => ({ ...r }));
+  }
+
+  de(personaId: string): Reserva[] {
+    return this.guardadas.filter((r) => r.personaId === personaId);
   }
 }
 
 export class PersonasEnMemoria implements PersonaRepositorio {
   readonly personas = new Map<string, Persona>();
+  private siguiente = 1;
 
-  constructor(iniciales: Persona[] = []) {
+  constructor(
+    iniciales: Persona[],
+    private readonly reservas: ReservasEnMemoria,
+  ) {
     for (const persona of iniciales) this.personas.set(persona.id, { ...persona });
+  }
+
+  nuevoId(prefijo: string): string {
+    return `${prefijo}-${this.siguiente++}`;
   }
 
   async obtener(id: string): Promise<Persona | null> {
@@ -106,100 +128,86 @@ export class PersonasEnMemoria implements PersonaRepositorio {
     });
   }
 
-  async sincronizar(empleado: Persona, familiares: Persona[]): Promise<void> {
-    this.personas.set(empleado.id, { ...empleado });
-    const vigentes = new Set(familiares.map((familiar) => familiar.id));
-    for (const persona of this.personas.values()) {
-      if (persona.codigoTitular === empleado.id && persona.tipo === "FAMILIAR" && !vigentes.has(persona.id)) {
-        persona.vigente = false;
-      }
-    }
-    for (const familiar of familiares) this.personas.set(familiar.id, { ...familiar });
+  async buscarPorCi(ci: string): Promise<Persona | null> {
+    const persona = [...this.personas.values()].find((p) => p.ci === ci);
+    return persona ? { ...persona } : null;
   }
 
-  async familiaresVigentes(codigoTitular: string): Promise<Persona[]> {
+  async familiares(titularId: string): Promise<Persona[]> {
     return [...this.personas.values()]
-      .filter((p) => p.codigoTitular === codigoTitular && p.tipo === "FAMILIAR" && p.vigente)
+      .filter((p) => p.titularId === titularId && p.tipo === "FAMILIAR")
       .map((p) => ({ ...p }));
   }
-}
 
-export class AutorizacionesEnMemoria implements AutorizacionRepositorio {
-  constructor(private readonly roles: Record<string, Rol> = {}) {}
+  async familiaresActivos(titularId: string): Promise<Persona[]> {
+    return (await this.familiares(titularId)).filter((p) => p.activo);
+  }
 
-  async obtenerRol(codigoEmpleado: string): Promise<Rol | null> {
-    return this.roles[codigoEmpleado] ?? null;
+  async agregarFamiliar(titularId: string, familiar: NuevoFamiliar): Promise<Persona> {
+    const persona: Persona = { ...familiar, id: this.nuevoId("F"), tipo: "FAMILIAR", titularId, activo: true };
+    this.personas.set(persona.id, persona);
+    return { ...persona };
+  }
+
+  async actualizar(persona: Persona): Promise<void> {
+    this.personas.set(persona.id, { ...persona });
+  }
+
+  async darDeBaja(personaIds: string[], anularDesde: string): Promise<void> {
+    for (const id of personaIds) {
+      const persona = this.personas.get(id);
+      if (persona) persona.activo = false;
+    }
+    for (const reserva of this.reservas.guardadas) {
+      if (personaIds.includes(reserva.personaId) && reserva.fecha >= anularDesde && reserva.estado === "CONFIRMADA") {
+        reserva.estado = "CANCELADA";
+      }
+    }
   }
 }
 
-export class AlmuerzosEnMemoria implements AlmuerzoRepositorio {
-  readonly guardados: Almuerzo[] = [];
+export class CuentasEnMemoria implements CuentaRepositorio {
+  readonly cuentas = new Map<string, Cuenta>();
 
-  constructor(iniciales: Almuerzo[] = []) {
-    this.guardados.push(...iniciales.map((almuerzo) => ({ ...almuerzo })));
+  constructor(
+    iniciales: Cuenta[],
+    private readonly personas: PersonasEnMemoria,
+  ) {
+    for (const cuenta of iniciales) this.cuentas.set(cuenta.personaId, { ...cuenta });
   }
 
-  private delMes(almuerzo: Almuerzo, anio: number, mes: number): boolean {
-    const periodo = anioMes(almuerzo.fecha);
-    return periodo.anio === anio && periodo.mes === mes;
+  async obtener(personaId: string): Promise<Cuenta | null> {
+    const cuenta = this.cuentas.get(personaId);
+    return cuenta ? { ...cuenta } : null;
   }
 
-  async obtener(personaId: string, fecha: string): Promise<Almuerzo | null> {
-    const almuerzo = this.guardados.find((a) => a.personaId === personaId && a.fecha === fecha);
-    return almuerzo ? { ...almuerzo } : null;
+  async buscarPorNombreUsuario(nombreUsuario: string): Promise<Cuenta | null> {
+    const cuenta = [...this.cuentas.values()].find((c) => c.nombreUsuario === nombreUsuario);
+    return cuenta ? { ...cuenta } : null;
   }
 
-  async guardar(almuerzo: Almuerzo): Promise<void> {
-    const indice = this.guardados.findIndex((a) => a.personaId === almuerzo.personaId && a.fecha === almuerzo.fecha);
-    if (indice >= 0) this.guardados[indice] = { ...almuerzo };
-    else this.guardados.push({ ...almuerzo });
+  async buscarPorCodigo(codigoEmpleado: string): Promise<Cuenta | null> {
+    const cuenta = [...this.cuentas.values()].find((c) => c.codigoEmpleado === codigoEmpleado);
+    return cuenta ? { ...cuenta } : null;
   }
 
-  async listarDelTitular(codigoTitular: string, anio: number, mes: number): Promise<Almuerzo[]> {
-    return this.guardados
-      .filter((a) => a.codigoTitular === codigoTitular && this.delMes(a, anio, mes))
-      .map((a) => ({ ...a }));
+  async listar(): Promise<Cuenta[]> {
+    return [...this.cuentas.values()].map((c) => ({ ...c }));
   }
 
-  async listarDeLaPersona(personaId: string, anio: number, mes: number): Promise<Almuerzo[]> {
-    return this.guardados.filter((a) => a.personaId === personaId && this.delMes(a, anio, mes)).map((a) => ({ ...a }));
+  async registrar(datos: DatosPersonales, nueva: NuevaCuenta, familiares: NuevoFamiliar[]): Promise<UsuarioRegistrado> {
+    const id = this.personas.nuevoId("P");
+    const persona: Persona = { ...datos, id, tipo: "EMPLEADO", parentesco: null, titularId: id, activo: true };
+    this.personas.personas.set(id, persona);
+    const cuenta: Cuenta = { ...nueva, personaId: id, debeCambiarContrasena: true };
+    this.cuentas.set(id, cuenta);
+    const registrados: Persona[] = [];
+    for (const familiar of familiares) registrados.push(await this.personas.agregarFamiliar(id, familiar));
+    return { persona: { ...persona }, cuenta: { ...cuenta }, familiares: registrados };
   }
 
-  async listarConfirmados(fecha: string): Promise<Almuerzo[]> {
-    return this.guardados.filter((a) => a.fecha === fecha && a.estado === "CONFIRMADO").map((a) => ({ ...a }));
-  }
-
-  async listarDelMes(anio: number, mes: number): Promise<Almuerzo[]> {
-    return this.guardados.filter((a) => this.delMes(a, anio, mes)).map((a) => ({ ...a }));
-  }
-
-  de(personaId: string): Almuerzo[] {
-    return this.guardados.filter((a) => a.personaId === personaId);
-  }
-}
-
-export class FeriadosEnMemoria implements FeriadoRepositorio {
-  readonly feriados: Feriado[];
-
-  constructor(iniciales: Feriado[] = []) {
-    this.feriados = iniciales.map((feriado) => ({ ...feriado }));
-  }
-
-  async esFeriado(fecha: string): Promise<boolean> {
-    return this.feriados.some((feriado) => feriado.fecha === fecha);
-  }
-
-  async listar(anio: number, mes: number): Promise<Feriado[]> {
-    return this.feriados
-      .filter((feriado) => {
-        const periodo = anioMes(feriado.fecha);
-        return periodo.anio === anio && periodo.mes === mes;
-      })
-      .map((feriado) => ({ ...feriado }));
-  }
-
-  async guardar(feriado: Feriado): Promise<void> {
-    this.feriados.push({ ...feriado });
+  async actualizar(cuenta: Cuenta): Promise<void> {
+    this.cuentas.set(cuenta.personaId, { ...cuenta });
   }
 }
 
@@ -207,8 +215,8 @@ export class PensionesEnMemoria implements PensionRepositorio {
   readonly pensiones: Pension[];
 
   constructor(
-    iniciales: Pension[] = [],
-    private readonly almuerzos?: AlmuerzosEnMemoria,
+    iniciales: Pension[],
+    private readonly reservas: ReservasEnMemoria,
   ) {
     this.pensiones = iniciales.map((pension) => ({ ...pension }));
   }
@@ -217,13 +225,48 @@ export class PensionesEnMemoria implements PensionRepositorio {
     return this.pensiones.find((p) => p.personaId === personaId && p.anio === anio && p.mes === mes) ?? null;
   }
 
-  async listarDelTitular(codigoTitular: string, anio: number, mes: number): Promise<Pension[]> {
-    return this.pensiones.filter((p) => p.codigoTitular === codigoTitular && p.anio === anio && p.mes === mes);
+  async listarDelTitular(titularId: string, anio: number, mes: number): Promise<Pension[]> {
+    return this.pensiones.filter((p) => p.titularId === titularId && p.anio === anio && p.mes === mes);
   }
 
-  async registrar(pension: Pension, almuerzos: Almuerzo[]): Promise<void> {
+  async listarDelMes(anio: number, mes: number): Promise<Pension[]> {
+    return this.pensiones.filter((p) => p.anio === anio && p.mes === mes);
+  }
+
+  async registrar(pension: Pension, reservas: Reserva[]): Promise<void> {
     this.pensiones.push({ ...pension });
-    for (const almuerzo of almuerzos) await this.almuerzos?.guardar(almuerzo);
+    for (const reserva of reservas) await this.reservas.guardar(reserva);
+  }
+}
+
+export class MenusEnMemoria implements MenuRepositorio {
+  readonly menus: MenuSemanal[];
+
+  constructor(
+    iniciales: MenuSemanal[],
+    private readonly reservas: ReservasEnMemoria,
+  ) {
+    this.menus = iniciales.map((menu) => ({ ...menu, dias: menu.dias.map((dia) => ({ ...dia })) }));
+  }
+
+  async obtenerSemana(lunes: string): Promise<MenuSemanal | null> {
+    return this.menus.find((menu) => menu.lunes === lunes) ?? null;
+  }
+
+  async obtenerDia(fecha: string): Promise<MenuDia | null> {
+    return this.menus.flatMap((menu) => menu.dias).find((dia) => dia.fecha === fecha) ?? null;
+  }
+
+  async diasDelMes(anio: number, mes: number): Promise<MenuDia[]> {
+    return this.menus
+      .flatMap((menu) => menu.dias)
+      .filter((dia) => delMes(dia.fecha, anio, mes))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }
+
+  async publicar(menu: MenuSemanal, reservasDePension: Reserva[]): Promise<void> {
+    this.menus.push(menu);
+    for (const reserva of reservasDePension) await this.reservas.guardar(reserva);
   }
 }
 
@@ -247,6 +290,10 @@ export class SesionesEnMemoria implements SesionRepositorio {
   async eliminar(tokenHash: string): Promise<void> {
     this.sesiones.delete(tokenHash);
   }
+
+  async eliminarDeLaPersona(personaId: string): Promise<void> {
+    for (const [hash, sesion] of this.sesiones) if (sesion.personaId === personaId) this.sesiones.delete(hash);
+  }
 }
 
 export class TokensDePrueba implements GeneradorDeTokens {
@@ -261,7 +308,22 @@ export class TokensDePrueba implements GeneradorDeTokens {
   }
 }
 
-/** Exportador que no escribe disco: devuelve el JSON de lo que recibió, para comprobar los datos. */
+/** Cifrado visible, para que la prueba compruebe qué quedó guardado sin depender de scrypt. */
+export class CifradorDePrueba implements CifradorDeContrasenas {
+  async cifrar(contrasena: string): Promise<string> {
+    return `cifrada:${contrasena}`;
+  }
+
+  async verificar(contrasena: string, hash: string): Promise<boolean> {
+    return hash === `cifrada:${contrasena}`;
+  }
+
+  temporal(): string {
+    return "Temporal99";
+  }
+}
+
+/** Exportador que no escribe archivo: devuelve el JSON de lo que recibió, para comprobar los datos. */
 export class ExportadorDePrueba implements ExportadorReporte {
   readonly extension: string;
   readonly tipoContenido = "application/json";
@@ -277,92 +339,129 @@ export class ExportadorDePrueba implements ExportadorReporte {
   }
 }
 
-// --- Personas de prueba (mismas que el simulador) ------------------------------
+// --- Datos de prueba (los mismos que siembra la demo) ----------------------------------
 
-export const ana: Empleado = { codigoInstitucional: "UB-100", nombreCompleto: "Ana Rojas", activo: true };
-export const diego: Familiar = { id: "FAM-1001", nombreCompleto: "Diego Rojas", parentesco: "Hijo" };
-export const carlos: Empleado = { codigoInstitucional: "UB-101", nombreCompleto: "Carlos Mamani", activo: true };
-export const laura: Empleado = { codigoInstitucional: "UB-102", nombreCompleto: "Laura Quispe", activo: false };
-export const pedro: Empleado = { codigoInstitucional: "UB-103", nombreCompleto: "Pedro Flores", activo: true };
-export const familiaPedro: Familiar[] = [
-  { id: "FAM-2001", nombreCompleto: "María Flores", parentesco: "Cónyuge" },
-  { id: "FAM-2002", nombreCompleto: "Juan Flores", parentesco: "Hijo" },
-  { id: "FAM-2003", nombreCompleto: "Ana Flores", parentesco: "Hija" },
-  { id: "FAM-2004", nombreCompleto: "Luis Flores", parentesco: "Hijo" },
-];
-export const elena: Empleado = { codigoInstitucional: "UB-200", nombreCompleto: "Elena Vargas", activo: true };
+export const CLAVE = "clave1234";
 
-export const comoUsuario = (empleado: Empleado, rol: Rol = "EMPLEADO"): Usuario => ({
-  codigoInstitucional: empleado.codigoInstitucional,
-  rol,
-});
-export const encargada: Usuario = comoUsuario(elena, "ENCARGADO");
+/** El CI sale del nombre, así cada llamada a personasIniciales() devuelve los mismos datos. */
+function datos(nombres: string, apellidos: string): DatosPersonales {
+  const ci = String(4000000 + [...`${nombres}${apellidos}`].reduce((suma, letra) => suma * 31 + letra.charCodeAt(0), 7) % 999999);
+  return { nombres, apellidos, ci, fechaNacimiento: "1990-05-10", telefono: "70000000" };
+}
 
-/** La copia local que dejaría un inicio de sesión de cada empleado de prueba. */
+function empleado(id: string, nombres: string, apellidos: string, activo = true): Persona {
+  return { ...datos(nombres, apellidos), id, tipo: "EMPLEADO", parentesco: null, titularId: id, activo };
+}
+
+function familiar(id: string, nombres: string, apellidos: string, titularId: string, parentesco: Parentesco): Persona {
+  return { ...datos(nombres, apellidos), id, tipo: "FAMILIAR", parentesco, titularId, activo: true };
+}
+
+function cuenta(personaId: string, nombreUsuario: string, codigoEmpleado: string, tipo: TipoUsuario = "EMPLEADO"): Cuenta {
+  return { personaId, nombreUsuario, codigoEmpleado, tipo, contrasenaHash: `cifrada:${CLAVE}`, debeCambiarContrasena: false };
+}
+
+export const ELENA = "P-ELENA";
+export const ANA = "P-ANA";
+export const DIEGO = "F-DIEGO";
+export const CARLOS = "P-CARLOS";
+export const LAURA = "P-LAURA";
+export const PEDRO = "P-PEDRO";
+export const MARIA = "F-MARIA";
+export const JUAN = "F-JUAN";
+export const LUCIA = "F-LUCIA";
+export const LUIS = "F-LUIS";
+
 export function personasIniciales(): Persona[] {
   return [
-    personaDelEmpleado(ana),
-    personaDelFamiliar(ana.codigoInstitucional, diego),
-    personaDelEmpleado(carlos),
-    personaDelEmpleado(pedro),
-    ...familiaPedro.map((familiar) => personaDelFamiliar(pedro.codigoInstitucional, familiar)),
-    personaDelEmpleado(elena),
+    empleado(ELENA, "Elena", "Vargas"),
+    empleado(ANA, "Ana", "Rojas"),
+    familiar(DIEGO, "Diego", "Rojas", ANA, "HIJO"),
+    empleado(CARLOS, "Carlos", "Mamani"),
+    empleado(LAURA, "Laura", "Quispe", false),
+    empleado(PEDRO, "Pedro", "Flores"),
+    familiar(MARIA, "María", "Flores", PEDRO, "CONYUGE"),
+    familiar(JUAN, "Juan", "Flores", PEDRO, "HIJO"),
+    familiar(LUCIA, "Lucía", "Flores", PEDRO, "HIJA"),
+    familiar(LUIS, "Luis", "Flores", PEDRO, "HIJO"),
   ];
 }
 
 export function cuentasIniciales(): Cuenta[] {
   return [
-    { usuario: "arojas", contrasena: "demo123", empleado: ana, familiares: [diego] },
-    { usuario: "cmamani", contrasena: "demo123", empleado: carlos, familiares: [] },
-    { usuario: "lquispe", contrasena: "demo123", empleado: laura, familiares: [] },
-    { usuario: "pflores", contrasena: "demo123", empleado: pedro, familiares: familiaPedro },
-    { usuario: "evargas", contrasena: "demo123", empleado: elena, familiares: [] },
+    cuenta(ELENA, "evargas", "UB-200", "ADMINISTRADOR"),
+    cuenta(ANA, "arojas", "UB-100"),
+    cuenta(CARLOS, "cmamani", "UB-101"),
+    cuenta(LAURA, "lquispe", "UB-102"),
+    cuenta(PEDRO, "pflores", "UB-103"),
   ];
 }
 
-export function esporadico(personaId: string, codigoTitular: string, fecha: string, estado: Almuerzo["estado"] = "CONFIRMADO"): Almuerzo {
-  return { personaId, codigoTitular, fecha, origen: "ESPORADICO", precioBs: 18, estado };
+export function comoUsuario(id: string, tipo: TipoUsuario = "EMPLEADO"): Usuario {
+  return { id, nombreUsuario: id, tipo, debeCambiarContrasena: false };
+}
+export const admin: Usuario = comoUsuario(ELENA, "ADMINISTRADOR");
+
+export function menu(lunes: string, fechas = lunesAJuevesDe(lunes)): MenuSemanal {
+  return { lunes, publicadoEl: lunes, dias: fechas.map((fecha) => ({ fecha, descripcion: `Almuerzo del ${fecha}` })) };
 }
 
-export function dePension(personaId: string, codigoTitular: string, fecha: string, estado: Almuerzo["estado"] = "CONFIRMADO"): Almuerzo {
-  return { personaId, codigoTitular, fecha, origen: "PENSION", precioBs: 15, estado };
+/** Todos los lunes de octubre de 2026 con los cuatro días: 16 días con atención. */
+export function menusDeOctubre(): MenuSemanal[] {
+  return ["2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"].map((lunes) =>
+    menu(lunes, lunesAJuevesDe(lunes).filter((fecha) => fecha.startsWith("2026-10"))),
+  );
+}
+
+export function noPensionado(
+  personaId: string,
+  titularId: string,
+  fecha: string,
+  estado: Reserva["estado"] = "CONFIRMADA",
+): Reserva {
+  return { personaId, titularId, fecha, modalidad: "NO_PENSIONADO", precioBs: 18, estado };
+}
+
+export function pensionado(
+  personaId: string,
+  titularId: string,
+  fecha: string,
+  estado: Reserva["estado"] = "CONFIRMADA",
+): Reserva {
+  return { personaId, titularId, fecha, modalidad: "PENSIONADO", precioBs: 15, estado };
+}
+
+export function pension(personaId: string, titularId: string, anio = 2026, mes = 10): Pension {
+  return { personaId, titularId, anio, mes, solicitadaEl: "2026-09-20" };
 }
 
 /** Todos los dobles juntos y los casos de uso armados con ellos, igual que la composición real. */
-export function escenario(opciones: {
-  reloj?: RelojDePrueba;
-  personas?: Persona[];
-  almuerzos?: Almuerzo[];
-  feriados?: Feriado[];
-  pensiones?: Pension[];
-} = {}) {
+export function escenario(
+  opciones: {
+    reloj?: RelojDePrueba;
+    personas?: Persona[];
+    cuentas?: Cuenta[];
+    reservas?: Reserva[];
+    pensiones?: Pension[];
+    menus?: MenuSemanal[];
+  } = {},
+) {
   const reloj = opciones.reloj ?? relojEn("2026-10-06", 8, 30);
-  const almuerzos = new AlmuerzosEnMemoria(opciones.almuerzos);
+  const reservas = new ReservasEnMemoria(opciones.reservas);
+  const personas = new PersonasEnMemoria(opciones.personas ?? personasIniciales(), reservas);
   const excel = new ExportadorDePrueba("EXCEL");
   const pdf = new ExportadorDePrueba("PDF");
-  const dependencias: Dependencias = {
+  const dependencias = {
     reloj,
-    empresarial: new EmpresarialEnMemoria(cuentasIniciales()),
-    personas: new PersonasEnMemoria(opciones.personas ?? personasIniciales()),
-    autorizaciones: new AutorizacionesEnMemoria({ "UB-200": "ENCARGADO" }),
-    almuerzos,
-    feriados: new FeriadosEnMemoria(opciones.feriados),
-    pensiones: new PensionesEnMemoria(opciones.pensiones, almuerzos),
+    personas,
+    cuentas: new CuentasEnMemoria(opciones.cuentas ?? cuentasIniciales(), personas),
+    reservas,
+    pensiones: new PensionesEnMemoria(opciones.pensiones ?? [], reservas),
+    menus: new MenusEnMemoria(opciones.menus ?? [menu("2026-10-05"), menu("2026-10-12")], reservas),
     sesiones: new SesionesEnMemoria(),
+    cifrador: new CifradorDePrueba(),
     tokens: new TokensDePrueba(),
     exportadores: [excel, pdf],
-  };
-  return {
-    ...dependencias,
-    reloj,
-    almuerzos,
-    empresarial: dependencias.empresarial as EmpresarialEnMemoria,
-    personas: dependencias.personas as PersonasEnMemoria,
-    feriados: dependencias.feriados as FeriadosEnMemoria,
-    pensiones: dependencias.pensiones as PensionesEnMemoria,
-    sesiones: dependencias.sesiones as SesionesEnMemoria,
-    excel,
-    pdf,
-    casos: crearCasosDeUso(dependencias),
-  };
+  } satisfies Dependencias;
+  return { ...dependencias, excel, pdf, casos: crearCasosDeUso(dependencias) };
 }
