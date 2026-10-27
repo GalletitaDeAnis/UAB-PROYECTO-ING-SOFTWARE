@@ -52,3 +52,30 @@ Material de partida: los documentos v2 del equipo (backlog, casos de uso y arqui
 ### Qué falta del integrante
 
 Leer y poder explicar sin el chat: `src/dominio/`, `src/aplicacion/pensionar.ts`, `avisarInasistencia.ts`, `prisma/schema.prisma`, la migración, `resolvers.ts` y `sistemaEmpresarialHttp.ts`. En particular: por qué Supabase no se consume directo, qué hace el RLS, por qué la sesión es un token en la base y no un JWT, y qué se cambia cuando llegue la API real de TI.
+
+## Tercera parte: backlog final y despliegue
+
+Fecha: 27 de octubre de 2026.  
+Herramienta: Claude Code (modelo Claude Opus 5.5), usada por el integrante a cargo de API y base de datos.  
+Material de partida: el backlog final, los diagramas y la arquitectura del equipo, y la rúbrica.
+
+### Qué hizo la asistencia
+
+- Pasó el dominio, los casos de uso y la base al backlog final: registro de usuarios y familiares por el administrador (HU01), credenciales propias con scrypt y cambio en el primer ingreso (HU02), menú semanal (HU03), gestión y bajas (HU09). Quitó la API empresarial, su simulador y los feriados de la v2.
+- Escribió la migración que reemplaza las tablas v2, los repositorios Prisma con transacciones y los datos de demo.
+- Escribió las pantallas del administrador y del empleado y amplió la API GraphQL.
+- Escribió las pruebas por criterio de las 11 historias, de pantallas, de GraphQL y de infraestructura.
+- Preparó el despliegue en Render y redibujó los diagramas de casos de uso, clases y capas a partir de los del equipo.
+- Redactó en Markdown el backlog final con la columna de pruebas, los casos de uso, la arquitectura, la base de datos, la API, la Definition of Done, el registro de refactorización, las entregas y la revisión de los documentos.
+
+### Cómo se verificó
+
+- `npm run typecheck` sin errores, `npm test` con 157 pruebas en verde y `npm run test:cobertura` con 98 % de líneas y 90 % de ramas.
+- Las pruebas encontraron dos errores en los propios datos de prueba y un defecto en el exportador (registrados en [registro-de-refactorizacion.md](registro-de-refactorizacion.md)); se corrigieron antes de integrar.
+- La aplicación se recorrió desplegada con los usuarios de prueba.
+
+### Qué falta del integrante
+
+Leer y poder explicar sin el chat: `src/aplicacion/comun.ts` (`sinPermiso`), `menu.ts` (por qué publicar confirma a los pensionados), `avisarInasistencia.ts` (cómo se calcula el mínimo con menús parciales), `gestionarUsuarios.ts` (qué anula una baja y por qué no se borra nada), `contrasenas.ts` (qué es la sal), la migración `20261027000000_backlog_final` y `web.ts` (cómo se obliga a cambiar la contraseña). Las decisiones D1 a D10 del backlog las tiene que confirmar el equipo con el Product Owner.
+
+Los archivos de la segunda parte que ya no existen (`sistemaEmpresarialHttp.ts`, el simulador) se reemplazaron en este corte.

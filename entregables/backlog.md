@@ -1,392 +1,295 @@
-# Product backlog (versión 2)
+# Product backlog (versión final)
 
-Sistema de reservas del restaurante · Unión Boliviana. Versión 2 (refinamiento).
+Sistema de reservas y pensionamiento de almuerzos · Restaurante de la Unión Boliviana.
+Fuente: documento del equipo «practica_producto_B_backlog_final». Este archivo agrega la columna **Prueba** (qué prueba automática verifica cada criterio) y las decisiones que el código tuvo que tomar donde el texto no alcanzaba.
 
-> Fuente: documento del equipo «practica_producto_B_backlog_v2». Este archivo lo transcribe para que el backlog, los diagramas y el código estén en el mismo repositorio. Si el equipo cambia el Word, se cambia aquí en el mismo pull request. Las observaciones pendientes están en [revision-documentos-v2.md](revision-documentos-v2.md).
+## Qué cambió respecto de la versión 2
 
-## Qué cambió en esta versión
+| Versión 2 | Versión final | Motivo |
+| --- | --- | --- |
+| El ingreso usaba el usuario de la API del sistema empresarial; la API entregaba empleados y familiares. | **HU01**: el administrador registra usuarios y familiares en la base propia. **HU02**: usuario y contraseña propios, cambio obligatorio en el primer ingreso. | TI no entregó la API. El Product Owner decidió registrar en el sistema (R3, R5). |
+| HU07 Registrar feriados del mes. | **HU03** Publicar el menú semanal. Un día sin menú no tiene atención (R6, R7). | El menú cubre el caso del feriado y además informa qué se sirve. |
+| HU05 Ver mis familiares habilitados (copia de la API). | Los familiares los gestiona el administrador (HU01, **HU09**). | Ya no hay fuente externa. |
+| HU08 Pensionarme + HU09 Pensionar a un familiar. | **HU07** Pensionar (para sí o para uno o varios familiares). | Misma regla y misma pantalla: eran una sola historia partida (rompía la I de INVEST). |
+| HU02 Reservar mi almuerzo + HU06 Reservar para un familiar. | **HU04** Reservar almuerzo. | Mismo motivo. |
+| — | **HU09** Modificar o dar de baja usuarios y familiares. | Nueva: con registro propio hace falta mantenerlo. |
 
-- Los familiares de primer grado registrados en el sistema empresarial pueden consumir un almuerzo por persona. No ingresan al sistema: el empleado reserva por ellos o los pensiona.
-- La reserva y la pensión son nominales: cada almuerzo se registra a nombre de quien lo consume, para controlar el mínimo de 10 de cada pensionado.
-- Se agregan el login y la integración con la API del sistema empresarial, que no figuraban como historia en ningún sprint.
-- Se corrigen inconsistencias de la versión 1 (sección 7).
+El control de cambios de v1 → v2 está en el historial de Git (`git log -- entregables/backlog.md`).
 
-## 1. Contexto y visión del producto
+## 1. Contexto y visión
 
-| Pregunta | Respuesta |
+| Aspecto | Descripción |
 | --- | --- |
-| Problema | Las reservas del restaurante se coordinan por WhatsApp. Es difícil saber cuántos almuerzos preparar, controlar las reglas de los pensionados y calcular a fin de mes cuánto descontar a cada empleado. Ahora, además, los empleados necesitan reservar para sus familiares. |
-| Usuarios | Empleado no pensionado (uso esporádico). Empleado pensionado. Familiar de primer grado (beneficiario): consume, pero no ingresa al sistema; el empleado titular reserva o lo pensiona. Encargado del restaurante. |
-| Propuesta de valor | Reservar, pensionarse y cancelar (para uno mismo y para cada familiar registrado) en un solo lugar, ingresando con el mismo usuario del sistema empresarial, con las reglas y precios aplicados por persona y un reporte mensual por empleado titular listo para descuento por planilla. |
-| Integración (sí entra) | Consumo de la API del sistema empresarial (solo lectura) para validar el inicio de sesión, obtener los datos del empleado y obtener sus familiares de primer grado. |
-| Alcance inicial (no entra) | Registro o alta de empleados o familiares (se leen de la API), modificar datos del sistema empresarial, acceso propio para familiares, pagos en línea, menú del día, notificaciones push y envío automático a RRHH (el reporte se entrega en Excel y PDF). |
+| Problema | Las reservas se coordinan por WhatsApp. Es difícil saber cuántos almuerzos preparar, qué días hay atención, controlar las reglas de los pensionados y calcular a fin de mes cuánto descontar a cada empleado por lo suyo y lo de sus familiares. |
+| Usuarios | **Usuario administrador** (encargado del restaurante): gestiona usuarios y familiares, publica el menú, ve los almuerzos del día y genera el reporte. **Usuario empleado**: reserva, cancela, se pensiona y avisa inasistencias para sí y sus familiares, y consulta su consumo. |
+| Beneficiarios (no usuarios) | Familiares de primer grado. Consumen, pero no ingresan: el usuario empleado actúa a su nombre. |
+| Propuesta de valor | Usuarios, menú, reservas y pensiones por persona en un solo lugar, con precios y reglas automáticos y un reporte listo para planilla. |
+| Fuera del alcance | Acceso de familiares, autorregistro, pagos en línea, notificaciones y envío automático a planilla (el reporte se entrega en Excel y PDF). |
 
 ### Reglas del negocio
 
-| # | Estado v2 | Regla |
+| # | Regla | Dónde está en el código |
 | --- | --- | --- |
-| R1 | Modificada | El restaurante sirve solo almuerzos, de lunes a jueves, para funcionarios de la Unión Boliviana y sus familiares de primer grado registrados en el sistema empresarial. Su uso no es obligatorio ni gratuito. |
-| R1b | Modificada | Empleados y familiares ya están registrados en el sistema empresarial de la institución; el sistema del restaurante los consulta mediante su API (solo lectura) y no los registra. |
-| R2 | Modificada | Almuerzo no pensionado (uso esporádico): 18 Bs. Lo reserva el empleado desde el sistema, para sí o para un familiar: un solo almuerzo por persona por día. |
-| R2b | Sin cambio | Hora límite: toda reserva, cancelación o aviso de inasistencia (de cualquier persona) se hace hasta las 9:00 am del día en que se sirve el almuerzo. |
-| R3 | Modificada | Almuerzo pensionado: 15 Bs. La pensión se solicita por persona y antes de que inicie el mes. |
-| R4 | Modificada | Al pensionar a una persona, el sistema registra automáticamente a su nombre el almuerzo de todos los días del mes (lunes a jueves, sin feriados). No se reserva día por día: solo se avisan los días que esa persona no asistirá. |
-| R5 | Modificada | Cada pensionado (empleado o familiar) debe consumir mínimo 10 almuerzos en el mes. El mínimo se controla por persona, no por familia. |
-| R6 | Modificada | El empleado avisa (hasta las 9:00 am) cuando un pensionado a su cargo (él o un familiar) no asistirá; ese día no se le cuenta a esa persona. No puede avisar si esa persona queda por debajo de 10. |
-| R7 | Modificada | Si una persona con almuerzo confirmado no asiste y no se canceló a tiempo, se descuenta igual por planilla al empleado titular. |
-| R7b | Sin cambio | Los feriados no cuentan: no se confirman, no se cobran y no suman al mínimo. |
-| R8 | Modificada | No se paga en el momento: a fin de mes el encargado genera un reporte en Excel y PDF agrupado por empleado titular, con el detalle de cada persona a su cargo; todo se descuenta por planilla al titular. |
-| R9 | Nueva | Los familiares no tienen acceso al sistema. Solo el empleado titular puede reservar, pensionar, cancelar o avisar inasistencias en su nombre. |
-| R10 | Nueva | Tope diario = 1 (el empleado) + número de familiares de primer grado registrados. Ej.: cónyuge y 3 hijos → máximo 5 almuerzos por día o 5 pensionados. |
-| R11 | Nueva | Toda reserva y pensión es nominal: se registra a nombre de la persona que consumirá el almuerzo (no se aceptan «5 almuerzos» genéricos). Así se controla el mínimo de cada pensionado. |
-| R12 | Nueva | Para ingresar, el empleado usa su usuario y contraseña del sistema empresarial; el sistema los valida mediante la API. Solo empleados activos pueden ingresar. |
+| R1 | Solo almuerzos, de lunes a jueves, para empleados y familiares de primer grado registrados. No es obligatorio ni gratuito. | `tiempo.ts` `esLunesAJueves` |
+| R2 | Dos tipos de usuario: administrador y empleado. Cada uno accede solo a sus opciones. | `comun.ts` `sinPermiso` |
+| R3 | Solo el administrador registra, modifica y da de baja. El primero se crea al instalar; siempre queda al menos uno activo. | `registrarUsuario.ts`, `gestionarUsuarios.ts`, `prisma/seed.ts` |
+| R4 | Familiares de primer grado (cónyuge, hijo/hija, padre, madre) con los mismos datos personales. No ingresan. Un CI no se repite. | `modelo.ts` `PARENTESCOS`, `errorEnDatos`; `ci` único en la base |
+| R5 | Se ingresa con usuario y contraseña asignados; se cambia en el primer ingreso. Solo usuarios activos. | `iniciarSesion.ts`, `cambiarContrasena.ts` |
+| R6 | Cada domingo se publica el menú de lunes a jueves. Publicado no se modifica. Solo los días con menú tienen atención. | `menu.ts` `PublicarMenu` |
+| R7 | Un día sin menú no admite reservas, no confirma pensionados, no se cobra y no es falta. | `reservarAlmuerzo.ts`; llave foránea `reserva.fecha → menu_dia` |
+| R8 | No pensionado: 18 Bs, un almuerzo por persona por día. | `modelo.ts` `precioDe`; `CHECK reserva_precio_valido` |
+| R9 | Reservar, cancelar y avisar, hasta las 9:00 del día. | `tiempo.ts` `admiteCambio` |
+| R10 | Pensionado: 15 Bs, por persona, antes de que inicie el mes. Se confirma solo en cada día con menú. | `pensionar.ts`, `menu.ts` |
+| R11 | Mínimo 10 almuerzos por pensionado en el mes, sobre días con menú; si hay menos de 10 días, el mínimo es ese total. | `modelo.ts` `minimoDelMes` |
+| R12 | Se avisa la inasistencia de un pensionado; no se cobra. No si queda por debajo de su mínimo. | `avisarInasistencia.ts` |
+| R13 | Confirmado y no cancelado a tiempo se descuenta aunque no asista. | `modelo.ts` `cuentaParaCobro` |
+| R14 | Tope diario = 1 + familiares activos (también para pensionados). | `modelo.ts` `topeDiario` |
+| R15 | Toda reserva y pensión es nominal. | `comun.ts` `personaACargo` |
+| R16 | Los familiares pagan lo mismo; todo se descuenta al titular. | `Reserva.titularId` |
+| R17 | Reporte mensual en Excel y PDF con todos los usuarios empleados, también los sin consumo, y el detalle por persona. | `reporteMensual.ts`, `exportadores.ts` |
 
-### Supuestos y preguntas abiertas (validar con el Product Owner)
+### Decisiones tomadas al implementar (validar con el Product Owner)
 
-| # | Supuesto / pregunta | Cómo lo resuelve hoy el código |
-| --- | --- | --- |
-| S1 | Los familiares pagan el mismo precio que el empleado (15 Bs pensionado / 18 Bs esporádico). | Mismo precio. |
-| S2 | «Primer grado» es lo que el sistema empresarial marque como tal (p. ej. cónyuge, hijos, padres). El sistema del restaurante no decide el parentesco: lo lee de la API. | Se guarda el parentesco tal como llega. |
-| S3 | Un familiar puede pensionarse aunque el empleado no lo esté, y viceversa (la pensión es independiente por persona). | Independiente (HU09 CA3). |
-| S4 | El rol de encargado se identifica por un dato que entrega la API (cargo o rol) o por una lista configurada en el sistema del restaurante. | Lista configurada: tabla `autorizacion`, variable `ENCARGADOS`. Cambiar a la API es tocar solo el caso de uso de login. |
-| S5 | Si un familiar deja de figurar en el sistema empresarial a mitad de mes, ¿se cancelan sus reservas futuras? | No se cancelan solas: el familiar queda no vigente, ya no se puede elegir y su historial sigue en el reporte. Pendiente de decisión del PO. |
+El backlog no las fija; el código eligió lo más simple que cumple los criterios. Cada una se cambia en un solo lugar.
 
-## 2. Login e integración con la API del sistema empresarial
-
-La integración no es una historia aparte (sería una tarea técnica sin valor visible, ver sección 6): se reparte como tareas técnicas dentro de HU01 (login) y HU05 (familiares).
-
-### 2.1 Datos que se consumen
-
-| Dato que entrega la API | Para qué lo usamos | Cuándo se consulta | Historia |
+| # | Pregunta | Decisión | Dónde cambiarla |
 | --- | --- | --- | --- |
-| Autenticación (usuario + contraseña) | Validar el inicio de sesión sin crear cuentas nuevas | Al iniciar sesión | HU01 |
-| Datos del empleado: código, nombre, CI, estado (activo/inactivo), cargo o rol | Identificar al titular de reservas y descuentos; saber si es encargado | Al iniciar sesión | HU01 |
-| Familiares de primer grado: id, nombre, parentesco | Mostrar a quiénes se puede reservar o pensionar y calcular el tope diario | Al iniciar sesión; se revalida al reservar o pensionar | HU05, HU06, HU09 |
+| D1 | ¿Se puede publicar el menú otro día que no sea domingo? | Sí, mientras la semana no haya terminado y sin incluir días ya pasados. El domingo es la costumbre, no un bloqueo. | `PublicarMenu` |
+| D2 | ¿Se publica una semana sin ningún día? | No: al menos un día. Una semana sin atención simplemente no se publica. | `PublicarMenu` |
+| D3 | ¿«Antes de que inicie el mes» admite pedir con dos meses de anticipación? | No: solo el mes siguiente, hasta el último día del mes anterior. | `tiempo.ts` `esMesSiguiente` |
+| D4 | ¿Cómo se cuenta el mínimo si solo se publicaron algunas semanas? | Sobre los días con menú publicados hasta ese momento: mínimo = min(10, días con menú). A comienzos de mes hay menos avisos disponibles; crecen al publicar. | `minimoDelMes` |
+| D5 | Contraseña | Al menos 8 caracteres, con letras y números. Se guarda con scrypt y sal. | `cambiarContrasena.ts` |
+| D6 | ¿Puede haber dos cónyuges, dos padres o dos madres? | No. Hijos sin límite. | `registrarUsuario.ts` `UNICOS` |
+| D7 | ¿El administrador tiene grupo familiar? | No: no reserva (R2). Si un empleado pasa a administrador, sus familiares quedan registrados. | `RegistrarUsuario`, `AgregarFamiliar` |
+| D8 | ¿Qué reservas anula una baja? | Las que todavía se podían cancelar: desde hoy si es antes de las 9:00, si no desde mañana. | `DarDeBaja` |
+| D9 | ¿Un titular dado de baja con consumo en el mes sale en el reporte? | Sí: su consumo anterior se descuenta igual (HU09 CA2). | `GenerarReporteMensual` |
+| D10 | ¿Puede un pensionado reservar como no pensionado un día en que avisó inasistencia? | No: un almuerzo por persona por día en su mes de pensión. | `ReservarAlmuerzo` |
 
-### 2.2 Flujo de inicio de sesión
+## 2. Product backlog priorizado
 
-1. El empleado escribe su usuario y contraseña del sistema empresarial en la pantalla de ingreso del restaurante.
-2. El backend del restaurante envía las credenciales a la API por HTTPS. La contraseña nunca se guarda en el sistema del restaurante.
-3. La API responde si las credenciales son válidas y devuelve el código del empleado (o un token).
-4. El backend consulta los datos del empleado y verifica que esté activo. Si no lo está, se niega el ingreso.
-5. El backend consulta los familiares de primer grado y guarda una copia local (id, nombre, parentesco) para registrar reservas nominales y mantener el historial del reporte aunque luego cambie el sistema empresarial.
-6. Se crea una sesión propia del restaurante (token con expiración por 30 minutos de inactividad) y se muestra la pantalla principal según el rol (empleado o encargado).
-7. Si la API no responde en 5 segundos o devuelve error, se muestra «No se pudo validar tu usuario, intenta más tarde» y no se permite el ingreso (no hay ingreso sin conexión).
+Ordenado por valor, esfuerzo y dependencias; el número coincide con el orden. Planning Poker con la escala 1, 2, 3, 5, 8, 13. Total: **48 puntos**.
 
-### 2.3 Servicios esperados de la API
-
-Nombres referenciales: deben confirmarse con el área de TI de la institución según la documentación real de la API.
-
-| Método | Servicio (referencial) | Qué devuelve / qué usamos |
-| --- | --- | --- |
-| POST | `/auth/login` | Recibe usuario y contraseña; responde válido/inválido y un token o el código del empleado |
-| GET | `/empleados/{codigo}` | Nombre, CI, estado activo, cargo/rol |
-| GET | `/empleados/{codigo}/familiares` | Lista de familiares de primer grado: id, nombre, parentesco |
-
-Mientras no exista la API real, el repositorio trae un simulador con estas mismas rutas (`simulador-empresarial/`). El adaptador que la consume está en `src/infraestructura/sistemaEmpresarialHttp.ts`.
-
-### 2.4 Reglas técnicas de la integración
-
-- Uso solo de lectura: el sistema del restaurante no escribe en el sistema empresarial.
-- La URL y las credenciales de acceso a la API se guardan en variables de entorno, no en el código.
-- Tiempo máximo de espera (timeout) de 5 segundos por llamada y registro (log) de cada error de la API.
-- Se guardan solo los datos mínimos necesarios (protección de datos personales de empleados y familiares).
-- La copia local de familiares se actualiza en cada inicio de sesión.
-
-## 3. Product Backlog priorizado
-
-Ordenado por valor, riesgo y esfuerzo, respetando las dependencias. El número de historia coincide con su orden de prioridad. Estimación en puntos de historia con Planning Poker (escala 1, 2, 3, 5, 8, 13). Total: 46 puntos.
-
-| ID | Historia | Criterios de aceptación (resumen) | Valor | Esfuerzo | Pts | Depende de | Sprint | Cambio v2 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| HU01 | Iniciar sesión con usuario del sistema empresarial | Credenciales válidas y activo → ingresa / incorrectas o inactivo → no / API caída → mensaje / sesión expira a los 30 min / encargado ve sus opciones | Alto | Medio | 5 | — | S1 | Reescrita |
-| HU02 | Reservar mi almuerzo (uso esporádico) | Antes de las 9:00 → 18 Bs / después no / solo L–J / uno por persona por día | Alto | Bajo | 3 | HU01 | S1 | Sin cambio |
-| HU03 | Cancelar mi reserva (uso esporádico) | Antes de las 9:00 → no se cobra / después no puede / reservó y no fue → se descuenta | Alto | Bajo | 2 | HU02 | S1 | Sin cambio |
-| HU04 | Ver almuerzos confirmados del día | Total y lista con nombre / tipo (empleado/familiar) y titular / cancelados no aparecen | Alto | Bajo | 2 | HU02 | S1 | Modificada |
-| HU05 | Ver mis familiares habilitados | Lista desde la API con parentesco / tope diario / no se agregan a mano | Alto | Bajo | 3 | HU01 | S2 | Nueva |
-| HU06 | Reservar almuerzo para un familiar | Nominal a 18 Bs al titular / uno por persona por día / tope y hora límite / cancela sin afectar otras | Alto | Medio | 3 | HU02, HU05 | S2 | Nueva |
-| HU07 | Registrar feriados del mes | No se reserva ni confirma / no se cobra | Medio | Bajo | 2 | HU01 | S2 | Sin cambio |
-| HU08 | Pensionarme (reserva automática del mes) | L–J del mes a 15 Bs / feriados no / tardía o duplicada se rechaza / sin almuerzo extra | Alto | Medio | 5 | HU01, HU07 | S2 | Fusionada |
-| HU09 | Pensionar a un familiar | Nominal a 15 Bs / independiente del titular / tope y fecha límite / no duplica | Alto | Medio | 5 | HU05, HU08 | S3 | Nueva |
-| HU10 | Avisar inasistencia de un pensionado | Por persona antes de las 9:00 / mínimo de 10 por persona / no avisó y no fue → se descuenta | Alto | Medio | 5 | HU08 | S3 | Modificada |
-| HU11 | Generar reporte mensual por titular | Agrupa por titular con detalle por persona / 15 y 18 Bs / faltas sin aviso; sin feriados / Excel y PDF | Alto | Alto | 8 | HU02, HU06, HU08, HU09, HU10 | S4 | Modificada |
-| HU12 | Ver mi consumo del mes (y de mi familia) | Detalle y monto por persona / total a descontar / inasistencias que aún puede avisar | Medio | Bajo | 3 | HU02, HU08 | S4 | Modificada |
+| ID | Historia | Valor | Esfuerzo | Pts | Depende de | Sprint |
+| --- | --- | --- | --- | --- | --- | --- |
+| HU01 | Registrar usuario y su grupo familiar | Alto | Medio | 5 | — | S1 |
+| HU02 | Iniciar sesión | Alto | Bajo | 3 | HU01 | S1 |
+| HU03 | Publicar el menú semanal | Alto | Bajo | 3 | HU02 | S1 |
+| HU04 | Reservar almuerzo | Alto | Medio | 5 | HU01, HU03 | S2 |
+| HU05 | Cancelar reserva | Alto | Bajo | 3 | HU04 | S2 |
+| HU06 | Ver almuerzos confirmados del día | Alto | Bajo | 2 | HU04 | S2 |
+| HU07 | Pensionar | Alto | Alto | 8 | HU01, HU03 | S3 |
+| HU08 | Avisar inasistencia de un pensionado | Alto | Medio | 5 | HU07 | S3 |
+| HU09 | Modificar o dar de baja usuarios y familiares | Medio | Bajo | 3 | HU01 | S4 |
+| HU10 | Generar reporte mensual | Alto | Alto | 8 | HU04, HU05, HU07, HU08 | S4 |
+| HU11 | Consultar mi consumo del mes | Medio | Bajo | 3 | HU04, HU07 | S4 |
 
 ### Plan de sprints
 
-Velocidad planificada: entre 10 y 13 puntos por sprint. El backlog se revisa en cada Sprint Review y se refina antes de cada Sprint Planning.
-
 | Sprint | Objetivo (Sprint Goal) | Historias | Puntos |
 | --- | --- | --- | --- |
-| 1 | Un empleado ingresa con su usuario del sistema empresarial, reserva y cancela su almuerzo, y el encargado sabe cuántos almuerzos preparar cada día. | HU01–HU04 | 12 |
-| 2 | El empleado puede reservar para sus familiares registrados y pensionarse para el mes siguiente, sin que se cobren feriados. | HU05–HU08 | 13 |
-| 3 | Cada familiar puede ser pensionado de forma individual y el empleado avisa inasistencias por persona, respetando el mínimo de 10 de cada uno. | HU09–HU10 | 10 |
-| 4 | El encargado obtiene el reporte mensual por titular para descuento por planilla y cada empleado ve el consumo de su familia. | HU11–HU12 | 11 |
+| 1 | El administrador registra usuarios con su grupo familiar y publica el menú; cada usuario ingresa y ve las opciones de su tipo. | HU01–HU03 | 11 |
+| 2 | El empleado reserva y cancela para sí y su familia; el administrador sabe cuántos almuerzos preparar. | HU04–HU06 | 10 |
+| 3 | El empleado pensiona a cada persona y avisa inasistencias respetando el mínimo. | HU07–HU08 | 13 |
+| 4 | El administrador mantiene los usuarios y obtiene el reporte; el empleado consulta su consumo. | HU09–HU11 | 14 |
 
-> **Pendiente del equipo:** la rúbrica tiene tres entregas de sprint (sesiones 6, 10 y 13) y el Demo Day. Este plan tiene cuatro sprints. Hay que decidir en el Planning cómo quedan HU11 y HU12 dentro del Sprint 3. Ver [revision-documentos-v2.md](revision-documentos-v2.md).
+La rúbrica tiene tres entregas (sesiones 6, 10 y 13) y el Demo Day. Cómo se reparten los cuatro sprints en esas fechas está en [entregas.md](entregas.md).
 
 ### Justificación del orden
 
-- El login (HU01) va primero: sin validar al empleado contra la API no se sabe quién reserva ni a quién descontar. Además es el mayor riesgo técnico del proyecto (depende de un sistema externo que no controlamos), por eso se ataca en el primer sprint.
-- El Sprint 1 sigue siendo pequeño y mostrable: ingresar, reservar, cancelar y ver el total del día ya resuelve el problema principal del WhatsApp.
-- Los familiares van después del flujo individual (Sprint 2): reutilizan las reglas de reserva de HU02 y solo agregan elegir a la persona. HU05 va antes que HU06 porque sin la lista que entrega la API no hay a quién reservar.
-- La pensión de familiares (HU09) va después de la pensión propia (HU08): es la misma lógica aplicada por persona; así HU08 se valida primero con un caso simple.
-- El reporte (HU11) va al final: necesita datos de reservas, pensiones e inasistencias de todas las personas. Se re-estimó de 5 a 8 puntos porque ahora agrupa por titular con detalle por persona.
-
-## 4. Historias de usuario detalladas
-
-Formato: Como «usuario», quiero «acción», para «beneficio». Criterios en formato Dado / Cuando / Entonces. La columna «Prueba» indica dónde está la prueba automática de cada criterio.
-
-### HU01 – Iniciar sesión con usuario del sistema empresarial (Reescrita)
-
-Como empleado de la Unión Boliviana, quiero iniciar sesión con el mismo usuario y contraseña del sistema empresarial, para no crear otra cuenta y que mis reservas y descuentos queden a mi nombre.
-
-Valor: Alto · Esfuerzo: Medio · 5 pts · Depende de: —
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que el empleado está activo en el sistema empresarial y escribe su usuario y contraseña correctos, cuando presiona «Ingresar», entonces accede al sistema y ve su nombre y sus reservas. | `tests/hu01.iniciarSesion.test.ts` |
-| CA2. Dado que la contraseña es incorrecta, cuando intenta ingresar, entonces ve el mensaje «Usuario o contraseña incorrectos» y no accede. | ídem |
-| CA3. Dado que la persona no existe o figura como inactiva en el sistema empresarial, cuando intenta ingresar, entonces el sistema no le permite el acceso. | ídem |
-| CA4. Dado que la API del sistema empresarial no responde en 5 segundos, cuando el empleado intenta ingresar, entonces ve «No se pudo validar tu usuario, intenta más tarde» y no accede. | ídem y `tests/integracion.empresarial.test.ts` |
-| CA5. Dado que el empleado inició sesión y no usa el sistema durante 30 minutos, cuando intenta realizar una acción, entonces el sistema le pide volver a ingresar. | ídem y `tests/api.graphql.test.ts` |
-| CA6. Dado que el usuario tiene rol de encargado, cuando ingresa, entonces ve además las opciones del encargado (lista del día, feriados, reporte); un empleado sin ese rol no las ve. | ídem |
-
-Nota: el sistema nunca guarda la contraseña: la envía a la API y solo conserva su propia sesión. Si el empleado no reserva ni se pensiona, no se le registra ningún almuerzo ni descuento (el uso es opcional).
-
-Tareas técnicas (consumo de la API): configurar el cliente de la API (URL y credenciales en variables de entorno, timeout de 5 s); servicio de backend de inicio de sesión que delega la validación en la API; generar la sesión propia con expiración por inactividad; pantalla de ingreso y mensajes de error; registro (log) de errores de la API; pruebas con usuarios de prueba entregados por TI de la institución.
-
-### HU02 – Reservar mi almuerzo (uso esporádico) (Sin cambio)
-
-Como empleado no pensionado, quiero reservar un almuerzo para el día que voy a comer, para asegurar mi comida sin tener que coordinar por WhatsApp con el encargado.
-
-Valor: Alto · Esfuerzo: Bajo · 3 pts · Depende de: HU01
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que es martes, son las 8:30 am y el empleado no tiene reserva para hoy, cuando confirma la reserva, entonces la reserva queda registrada a su nombre a 18 Bs y aparece en «mis reservas». | `tests/hu02.reservar.test.ts` |
-| CA2. Dado que son las 9:01 am del día del almuerzo, cuando el empleado intenta reservar para hoy, entonces el sistema indica que el horario de reservas cerró a las 9:00 y no registra la reserva. | ídem (bordes 8:59 y 9:00) |
-| CA3. Dado que el día elegido es viernes, sábado o domingo, cuando el empleado intenta reservar, entonces el sistema indica que el restaurante solo atiende de lunes a jueves. | ídem |
-| CA4. Dado que el empleado ya tiene una reserva a su nombre para ese día, cuando intenta reservar de nuevo para sí mismo, entonces el sistema no duplica la reserva. | ídem |
-
-### HU03 – Cancelar mi reserva (uso esporádico) (Sin cambio)
-
-Como empleado no pensionado, quiero cancelar una reserva que ya no voy a usar, para que no se me descuente por planilla un almuerzo que no voy a consumir.
-
-Valor: Alto · Esfuerzo: Bajo · 2 pts · Depende de: HU02
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que el empleado tiene una reserva para hoy y son las 8:59 am, cuando la cancela, entonces la reserva se elimina y no se considera en el reporte mensual. | `tests/hu03.cancelar.test.ts` |
-| CA2. Dado que son las 9:00 am o más tarde, cuando el empleado intenta cancelar la reserva de hoy, entonces el sistema no permite cancelar y le indica que el almuerzo se le cobrará. | ídem |
-| CA3. Dado que el empleado reservó, no canceló y no asistió, cuando se genera el reporte mensual, entonces ese almuerzo se incluye y se descuenta por planilla a 18 Bs. | ídem |
-
-### HU04 – Ver almuerzos confirmados del día (Modificada)
-
-Como encargado del restaurante, quiero ver la lista y el total de almuerzos confirmados para hoy, con el nombre de cada persona, para preparar la cantidad justa de comida sin desperdiciar.
-
-Valor: Alto · Esfuerzo: Bajo · 2 pts · Depende de: HU02
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que hoy hay 8 reservas confirmadas, cuando el encargado abre la lista del día después de las 9:00 am, entonces ve el total (8) y una fila por persona con: nombre, tipo (empleado / familiar), empleado titular y modalidad (pensionado / no pensionado). | `tests/hu04.lista.test.ts` |
-| CA2. Dado que una reserva fue cancelada antes de las 9:00 am, cuando el encargado abre la lista del día, entonces esa persona no aparece ni se cuenta en el total. | ídem |
-| CA3. Dado que hoy no hay ninguna reserva, cuando el encargado abre la lista, entonces ve el total 0 y el mensaje «No hay almuerzos confirmados para hoy». | ídem |
-
-Nota: la lista lee las reservas confirmadas del día sin importar su origen. Cuando se incorporen familiares (HU06) y pensiones (HU08, HU09), aparecerán automáticamente; esas historias incluyen un criterio que lo verifica.
-
-### HU05 – Ver mis familiares habilitados (Nueva)
-
-Como empleado, quiero ver la lista de mis familiares de primer grado registrados en el sistema empresarial, para saber por quiénes puedo reservar o pensionar.
-
-Valor: Alto · Esfuerzo: Bajo · 3 pts · Depende de: HU01
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que en el sistema empresarial el empleado tiene registrada a su esposa y a 3 hijos, cuando abre «Mi familia», entonces ve 4 familiares con nombre y parentesco, y el mensaje «Puedes reservar hasta 5 almuerzos por día». | `tests/hu05.familia.test.ts` |
-| CA2. Dado que un sobrino del empleado no está registrado como familiar de primer grado, cuando el empleado abre «Mi familia», entonces el sobrino no aparece y no existe opción para agregar personas a mano. | ídem |
-| CA3. Dado que RRHH registró un nuevo hijo en el sistema empresarial, cuando el empleado vuelve a iniciar sesión, entonces el nuevo hijo aparece en la lista. | ídem |
-| CA4. Dado que el empleado no tiene familiares registrados, cuando abre «Mi familia», entonces ve «No tienes familiares registrados» y su tope diario es 1. | ídem |
-
-Tareas técnicas (consumo de la API): consumir el servicio de familiares de la API; guardar la copia local (id, nombre, parentesco) y actualizarla en cada inicio de sesión; pantalla «Mi familia» con el tope diario.
-
-### HU06 – Reservar almuerzo para un familiar (Nueva)
-
-Como empleado, quiero reservar un almuerzo a nombre de un familiar registrado, para que pueda comer en el restaurante aunque él no tenga acceso al sistema.
-
-Valor: Alto · Esfuerzo: Medio · 3 pts · Depende de: HU02, HU05
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que es martes a las 8:30 am y el hijo Juan está en la lista de familiares, cuando el empleado reserva para Juan, entonces la reserva queda a nombre de Juan, a 18 Bs, con el empleado como titular del descuento, y Juan aparece en la lista del día del encargado como «familiar». | `tests/hu06.reservarFamiliar.test.ts` |
-| CA2. Dado que Juan ya tiene una reserva para hoy, cuando el empleado intenta reservar otra para Juan, entonces el sistema no la duplica (un almuerzo por persona por día). | ídem |
-| CA3. Dado que el empleado tiene esposa y 3 hijos y ya hay 5 reservas para hoy (él y sus 4 familiares), cuando intenta reservar otra, entonces el sistema indica que alcanzó el tope de 5 almuerzos. | ídem |
-| CA4. Dado que son las 9:01 am, cuando el empleado intenta reservar o cancelar para un familiar para hoy, entonces el sistema no lo permite. | ídem |
-| CA5. Dado que el empleado y Juan tienen reserva para hoy y son las 8:45 am, cuando cancela solo la reserva de Juan, entonces la de Juan se elimina y la del empleado sigue vigente. | ídem |
-
-Nota: no existe un campo de nombre libre: solo se puede elegir a una persona de la lista de HU05. Así el tope de R10 se cumple por diseño.
-
-### HU07 – Registrar feriados del mes (Sin cambio)
-
-Como encargado del restaurante, quiero registrar los feriados que caen de lunes a jueves, para que esos días no se confirmen ni se cobren almuerzos a nadie.
-
-Valor: Medio · Esfuerzo: Bajo · 2 pts · Depende de: HU01
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que el jueves 6 de agosto es feriado, cuando el encargado lo registra como feriado, entonces ese día no se puede reservar y no se confirma para ningún pensionado (empleado o familiar). | `tests/hu07.feriados.test.ts` |
-| CA2. Dado que un pensionado tenía confirmado un día que luego se registra como feriado, cuando se genera el reporte mensual, entonces ese día no se le cuenta ni se le cobra. | ídem |
-
-Nota: valor medio, pero es prerrequisito de la pensión (HU08 y HU09): sin feriados registrados, el sistema confirmaría y cobraría días sin servicio.
-
-### HU08 – Pensionarme (reserva automática de todo el mes) (Fusionada)
-
-Como empleado, quiero pensionarme para el mes siguiente y que el sistema me registre automáticamente el almuerzo de todos los días de lunes a jueves del mes, para no tener que reservar cada día y pagar 15 Bs en lugar de 18 Bs.
-
-Valor: Alto · Esfuerzo: Medio · 5 pts · Depende de: HU01, HU07
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que es 25 de septiembre, cuando el empleado solicita la pensión para octubre, entonces queda como pensionado de octubre y el sistema le registra a su nombre el almuerzo de todos los días de lunes a jueves del mes, a 15 Bs cada uno. | `tests/hu08.pensionarme.test.ts` |
-| CA2. Dado que el empleado es pensionado en octubre, cuando llega cualquier día de lunes a jueves de octubre, entonces su almuerzo ya aparece reservado y figura en la lista del encargado como «pensionado», sin que él haga nada. | ídem |
-| CA3. Dado que octubre tiene un feriado registrado en jueves, cuando se confirman los días del pensionado, entonces el día feriado no se confirma ni se cobra. | ídem |
-| CA4. Dado que ya es 1 de octubre, cuando el empleado solicita la pensión para octubre, entonces el sistema la rechaza porque debe solicitarse antes de que inicie el mes. | ídem |
-| CA5. Dado que el empleado ya es pensionado de octubre, cuando intenta pensionarse otra vez para octubre, entonces el sistema no duplica la pensión. | ídem |
-| CA6. Dado que el empleado pensionado tiene confirmado el almuerzo de hoy, cuando intenta hacer una reserva esporádica adicional para sí mismo, entonces el sistema no lo permite (un almuerzo por persona por día). | `tests/hu02.reservar.test.ts` |
-
-Nota: une la HU02 «Registro mensual de pensionados» y la HU07 «Pensionarse» de la versión 1, que describían la misma funcionalidad.
-
-Interpretación implementada: «para el mes siguiente» se toma literal. Durante septiembre solo se pide octubre; el 1 de octubre ya es tarde y noviembre todavía no se puede pedir. Además, si los feriados dejan un mes con menos de 10 días de servicio, la pensión se rechaza, porque el mínimo de R5 no se podría cumplir (nota de CU08).
-
-### HU09 – Pensionar a un familiar (Nueva)
-
-Como empleado, quiero pensionar a uno o varios de mis familiares para el mes siguiente, para que cada uno tenga su almuerzo diario a 15 Bs sin reservar día por día.
-
-Valor: Alto · Esfuerzo: Medio · 5 pts · Depende de: HU05, HU08
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que es 25 de septiembre y el empleado tiene esposa y 3 hijos, cuando pensiona a su esposa y a 2 hijos para octubre, entonces se crean 3 pensiones nominales, cada una con sus almuerzos de lunes a jueves (sin feriados) a 15 Bs, descontados al empleado titular. | `tests/hu09.pensionarFamiliar.test.ts` |
-| CA2. Dado que la hija Ana está pensionada en octubre, cuando el encargado abre la lista de un día de octubre, entonces Ana aparece como «familiar – pensionado» junto con el nombre del titular. | ídem |
-| CA3. Dado que el empleado no está pensionado, cuando pensiona a su hijo, entonces el sistema lo permite (la pensión es independiente por persona). | ídem |
-| CA4. Dado que ya es 1 de octubre, cuando el empleado intenta pensionar a un familiar para octubre, entonces el sistema lo rechaza. | ídem |
-| CA5. Dado que el hijo Juan ya está pensionado en octubre, cuando el empleado intenta pensionarlo otra vez, entonces el sistema no duplica la pensión. | ídem |
-| CA6. Dado que el empleado y sus 4 familiares ya están pensionados en octubre, cuando abre la opción de pensionar, entonces no hay más personas disponibles (tope de 5). | ídem |
-
-### HU10 – Avisar inasistencia de un pensionado (por persona) (Modificada)
-
-Como empleado, quiero avisar que una persona pensionada a mi cargo (yo o un familiar) no asistirá a un almuerzo confirmado, para que ese día no se le cuente ni se me descuente.
-
-Valor: Alto · Esfuerzo: Medio · 5 pts · Depende de: HU08
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que el hijo Juan es pensionado con 16 almuerzos confirmados en el mes y son las 8:00 am, cuando el empleado avisa que Juan no asistirá hoy, entonces se libera el día de Juan (le quedan 15), no se cobra, y los almuerzos de las demás personas no cambian. | `tests/hu10.avisarInasistencia.test.ts` |
-| CA2. Dado que a Juan le quedan exactamente 10 almuerzos y al empleado titular 14, cuando el empleado intenta avisar otra inasistencia de Juan, entonces el sistema no lo permite aunque el titular tenga margen (el mínimo de 10 es por persona). | ídem |
-| CA3. Dado que son las 9:00 am o más tarde, cuando el empleado intenta avisar la inasistencia de cualquier pensionado para hoy, entonces el sistema no lo permite e indica que ese almuerzo se cobrará. | ídem |
-| CA4. Dado que un pensionado no avisó y no asistió, cuando se genera el reporte mensual, entonces ese almuerzo se cuenta y se descuenta a 15 Bs al empleado titular. | ídem |
-
-Nota: para familiares aplica una vez terminada HU09; los criterios se prueban primero con la pensión propia (HU08).
-
-### HU11 – Generar reporte mensual por titular para descuento por planilla (Modificada)
-
-Como encargado del restaurante, quiero generar al final del mes un reporte por empleado titular con el detalle de cada persona a su cargo, para enviarlo a planilla y que el total se descuente al empleado.
-
-Valor: Alto · Esfuerzo: Alto · 8 pts · Depende de: HU02, HU06, HU08, HU09, HU10
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que en octubre el empleado Pedro fue pensionado con 12 almuerzos, su esposa pensionada con 10 y su hijo tuvo 3 reservas esporádicas, cuando el encargado genera el reporte de octubre, entonces Pedro aparece con 3 líneas de detalle (12 × 15 = 180 Bs; 10 × 15 = 150 Bs; 3 × 18 = 54 Bs) y un total a descontar de 384 Bs. | `tests/hu11.reporte.test.ts` |
-| CA2. Dado que un pensionado faltó sin avisar, cuando se genera el reporte, entonces ese almuerzo aparece incluido en el monto de esa persona. | ídem |
-| CA3. Dado que el reporte está generado, cuando el encargado elige exportarlo en Excel o en PDF, entonces obtiene el archivo con: empleado titular, persona, parentesco, modalidad, cantidad de almuerzos, precio unitario, subtotal por persona y total por titular. | ídem y `tests/exportadores.test.ts` |
-| CA4. Dado que hubo un feriado en el mes, cuando se genera el reporte, entonces el feriado no aparece como almuerzo en ninguna persona. | ídem |
-| CA5. Dado que un empleado no tuvo consumo propio ni de familiares en el mes, cuando se genera el reporte, entonces ese empleado no aparece. | ídem |
-
-### HU12 – Ver mi consumo del mes (y el de mi familia) (Modificada)
-
-Como empleado, quiero ver cuántos almuerzos llevamos en el mes yo y cada familiar a mi cargo, y el monto acumulado, para saber cuánto se me descontará de planilla.
-
-Valor: Medio · Esfuerzo: Bajo · 3 pts · Depende de: HU02, HU08
-
-| Criterio | Prueba |
-| --- | --- |
-| CA1. Dado que el empleado no pensionado tiene 4 reservas propias consumidas en el mes, cuando abre «Mi consumo», entonces ve 4 almuerzos y 72 Bs acumulados. | `tests/hu12.consumo.test.ts` |
-| CA2. Dado que el empleado es pensionado con 11 almuerzos restantes, cuando abre «Mi consumo», entonces ve cuántos almuerzos le quedan y cuántas inasistencias más puede avisar (1). | ídem |
-| CA3. Dado que el hijo del empleado es pensionado con 12 almuerzos y el empleado tuvo 2 reservas esporádicas, cuando abre «Mi consumo», entonces ve el detalle por persona, el total acumulado (12 × 15 + 2 × 18 = 216 Bs) y que su hijo aún puede avisar 2 inasistencias. | ídem |
-
-## 5. Estimación con Planning Poker
-
-Se toma HU02 (Reservar mi almuerzo) = 3 puntos como historia de referencia y las demás se estiman por comparación. Cada integrante vota en simultáneo con la escala 1, 2, 3, 5, 8, 13; si los votos difieren en más de un valor, quienes votaron el valor más alto y el más bajo explican su razón y se vuelve a votar hasta llegar a consenso.
-
-| Historia | Comparación con la referencia | Pts acordados | Cambio vs v1 |
-| --- | --- | --- | --- |
-| HU02 | Historia de referencia | 3 | — |
-| HU01 | Más que HU02: depende de un sistema externo, manejo de errores y sesión | 5 | 3 → 5 |
-| HU03 | Menor que HU02: misma regla de hora, sin crear datos | 2 | — |
-| HU04 | Menor que HU02: solo consulta y muestra | 2 | — |
-| HU05 | Similar a HU02: un servicio de la API y una pantalla | 3 | Nueva |
-| HU06 | Similar a HU02: reutiliza sus reglas y agrega elegir persona y tope | 3 | Nueva |
-| HU07 | Menor que HU02: registro simple | 2 | — |
-| HU08 | Mayor que HU02: genera todas las reservas del mes y aplica feriados | 5 | — |
-| HU09 | Igual a HU08 aplicado por persona, con tope | 5 | Nueva |
-| HU10 | Igual a HU08: conteo del mínimo por persona y hora límite | 5 | — |
-| HU11 | Mayor que HU08: cálculo por persona, agrupación por titular y 2 formatos | 8 | 5 → 8 |
-| HU12 | Similar a HU02: consulta con detalle por persona | 3 | 2 → 3 |
-
-## 6. Revisión INVEST
-
-✔ = cumple. ✔* = la historia tiene una dependencia declarada (columna «Depende de»); se puede desarrollar y probar por sí sola una vez terminada esa dependencia, y por eso se planificó en un sprint igual o posterior.
+- **HU01 primero**: sin usuarios no hay ingreso, reserva ni a quién descontar.
+- **HU02 y HU03 completan el Sprint 1**: el ingreso habilita las opciones por tipo y sin menú no hay días para reservar.
+- **Sprint 2 resuelve el problema principal**: reservar, cancelar y conocer el total del día reemplaza a WhatsApp.
+- **La pensión (Sprint 3) depende del menú**: los almuerzos se confirman sobre los días publicados.
+- **HU09 se posterga**: al inicio basta registrar; mantener hace falta con el sistema en uso.
+- **El reporte va al final**: necesita reservas, pensiones e inasistencias.
+
+## 3. Historias de usuario y criterios de aceptación
+
+Formato Como / Quiero / Para que; criterios Dado que / Cuando / Entonces. La columna **Prueba** nombra el archivo de `tests/` y el caso que empieza con el número del criterio.
+
+### HU01 – Registrar usuario y su grupo familiar · 5 pts
+
+**Como** usuario administrador **quiero** registrar a un empleado como usuario, asignarle su tipo y registrar a sus familiares de primer grado **para que** pueda ingresar y reservar para sí y sus familiares.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | el administrador ingresa datos personales, código, usuario, contraseña inicial y tipo | guarda | se crea el usuario activo con ese tipo | `hu01` CA1 |
+| CA2 | registra a un usuario empleado | agrega familiares con datos y parentesco | quedan como su grupo familiar y se calcula el tope diario | `hu01` CA2 |
+| CA3 | ya existe el mismo CI, código o nombre de usuario | intenta guardar | se rechaza e indica el dato duplicado | `hu01` CA3 (×3) |
+| CA4 | registra un familiar | elige el parentesco | solo cónyuge, hijo/hija, padre o madre | `hu01` CA4 (×2) |
+| CA5 | registra un familiar | guarda | queda sin credenciales de acceso | `hu01` CA5 |
+| CA6 | falta un dato obligatorio | intenta guardar | se indica el dato y no se guarda | `hu01` CA6; formatos inválidos |
+
+### HU02 – Iniciar sesión · 3 pts (referencia del Planning Poker)
+
+**Como** usuario del sistema **quiero** ingresar con mi usuario y contraseña **para que** acceda a las opciones de mi tipo y mis operaciones queden a mi nombre.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | está activo y las credenciales son correctas | «Ingresar» | entra y ve las opciones de su tipo | `hu02` CA1; `web` CA2 y CA3 |
+| CA2 | es administrador | ingresa | ve usuarios, menú, almuerzos del día y reporte | `hu02` CA2; `web` |
+| CA3 | es empleado | ingresa | ve reserva, pensión, inasistencias y consumo, no las del administrador | `hu02` CA3; `web`; `api.graphql` FORBIDDEN |
+| CA4 | la contraseña es incorrecta | «Ingresar» | «Usuario o contraseña incorrectos» y no entra | `hu02` CA4; `web` CA4 |
+| CA5 | fue dado de baja | intenta ingresar | no entra | `hu02` CA5; `hu09` CA3 |
+| CA6 | ingresa por primera vez con la contraseña inicial | entra | debe cambiarla antes de continuar | `hu02` CA6 (×2); `web` CA6; `api.graphql` CA6 |
+| CA7 | pasa 30 minutos sin actividad | intenta operar | se pide ingresar de nuevo | `hu02` CA7 (29 y 30 min) |
+
+### HU03 – Publicar el menú semanal · 3 pts
+
+**Como** usuario administrador **quiero** publicar cada domingo el menú de cada día con atención **para que** los empleados conozcan días y menú, y los días sin menú no se reserven ni se cobren.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | es domingo | registra el menú de lunes a jueves y publica | los empleados ven cada día y pueden reservar | `hu03` CA1 |
+| CA2 | un día no tendrá atención | publica sin ese día | se muestra «Sin atención», no admite reservas, no se cobra ni es falta | `hu03` CA2 (×2) |
+| CA3 | registra el menú | intenta incluir viernes a domingo | solo lunes a jueves | `hu03` CA3 |
+| CA4 | el menú ya fue publicado | intenta modificarlo | no se permite | `hu03` CA4; `web` HU03 |
+| CA5 | un día no figura en el menú | un empleado intenta reservar | se indica que no hay atención | `hu03` CA5 |
+
+### HU04 – Reservar almuerzo · 5 pts
+
+**Como** usuario empleado **quiero** reservar para mí o para uno o varios familiares en un día con menú **para que** cada persona tenga su almuerzo sin coordinar por WhatsApp.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | día con menú, antes de las 9:00, sin reserva | confirma para sí | queda a su nombre a 18 Bs | `hu04` CA1 |
+| CA2 | día con menú, antes de las 9:00 | elige uno o varios familiares | una reserva por familiar a 18 Bs, con él como titular | `hu04` CA2; `web` HU04 |
+| CA3 | la persona ya tiene reserva | intenta reservar otra vez | no se duplica | `hu04` CA3 (×2) |
+| CA4 | todos los del grupo ya reservaron | intenta otra | se alcanzó el tope diario | `hu04` CA4 (×3) |
+| CA5 | son las 9:00 o más | intenta reservar ese día | horario cerrado, no se registra | `hu04` CA5 (8:59 y 9:00) |
+| CA6 | el día no tiene menú | intenta reservar | no hay atención | `hu04` CA6; `web` CA6 |
+| CA7 | inicia una reserva | elige la persona | solo él y sus familiares activos | `hu04` CA7 |
+
+### HU05 – Cancelar reserva · 3 pts
+
+**Como** usuario empleado **quiero** cancelar la reserva propia o de un familiar **para que** no se descuente un almuerzo que no se consumirá.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | reserva propia, antes de las 9:00 | cancela | se anula y no entra al reporte | `hu05` CA1 |
+| CA2 | reservas propia y del familiar, antes de las 9:00 | cancela la del familiar | solo esa se anula | `hu05` CA2 |
+| CA3 | son las 9:00 o más | intenta cancelar | no se permite e informa que se cobrará | `hu05` CA3 (×2) |
+| CA4 | tenía reserva, no canceló ni asistió | se genera el reporte | se descuentan 18 Bs al titular | `hu05` CA4 |
+
+### HU06 – Ver almuerzos confirmados del día · 2 pts
+
+**Como** usuario administrador **quiero** ver la lista y el total de almuerzos confirmados del día **para que** prepare la cantidad justa.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | día con menú y reservas | consulta después de las 9:00 | total y, por persona, nombre, tipo, titular y modalidad | `hu06` CA1; `web` HU06 |
+| CA2 | una reserva se canceló antes de las 9:00 | consulta | no aparece ni cuenta | `hu06` CA2 |
+| CA3 | el día no tiene menú | consulta | «Sin atención» y total cero | `hu06` CA3; `web` HU06 |
+
+### HU07 – Pensionar · 8 pts
+
+**Como** usuario empleado **quiero** pensionarme o pensionar a uno o varios familiares para el mes siguiente **para que** el almuerzo de cada pensionado se confirme solo a 15 Bs en cada día con menú.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | el mes siguiente no inició | elige personas y confirma | una pensión por persona a 15 Bs, con él como titular | `hu07` CA1 |
+| CA2 | una persona está pensionada | el administrador publica el menú | se confirma su almuerzo en cada día con menú y aparece como pensionada | `hu07` CA2 (×2); `hu03` HU07 CA2 |
+| CA3 | está pensionada | un día no tiene menú | no se confirma, no se cobra ni es falta | `hu07` CA3 |
+| CA4 | el mes ya inició | intenta pensionar para ese mes | se rechaza | `hu07` CA4 (×2) |
+| CA5 | ya tiene pensión ese mes | intenta otra vez | no se duplica | `hu07` CA5 |
+| CA6 | él no está pensionado | pensiona solo a un familiar | se registra de forma independiente | `hu07` CA6 |
+| CA7 | tiene almuerzo confirmado como pensionado | intenta una reserva adicional | no se permite | `hu04` HU07 CA7; `hu07` CA7 |
+
+### HU08 – Avisar inasistencia de un pensionado · 5 pts
+
+**Como** usuario empleado **quiero** avisar que un pensionado a mi cargo no asistirá **para que** ese almuerzo no se cuente ni se descuente.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | tiene más programados que su mínimo, antes de las 9:00 | avisa | se libera ese almuerzo sin tocar a los demás | `hu08` CA1; `web` HU08 |
+| CA2 | al familiar le quedan exactamente 10 y al titular más | intenta otro aviso del familiar | no se permite: el mínimo es por persona | `hu08` CA2 (10 y 11) |
+| CA3 | son las 9:00 o más | intenta avisar | no se permite e informa que se cobrará | `hu08` CA3 |
+| CA4 | no avisó y no asistió | se genera el reporte | se descuentan 15 Bs | `hu08` CA4; `hu10` CA2 |
+| CA5 | un día no tuvo menú | se calculan los programados | no es inasistencia ni gasta avisos | `hu08` CA5 |
+| CA6 | el mes tiene menos de 10 días con menú | se controla el mínimo | el mínimo es el total de días con menú | `hu08` CA6; `calendario` R11 |
+
+### HU09 – Modificar o dar de baja usuarios y familiares · 3 pts
+
+**Como** usuario administrador **quiero** modificar datos y tipo, dar de baja y restablecer contraseñas **para que** solo las personas vigentes usen el servicio con los permisos correctos.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | existe un usuario empleado | agrega un familiar | queda disponible y el tope sube en uno | `hu09` CA1 (×2) |
+| CA2 | un familiar tiene reservas futuras | lo da de baja | se anulan sin cobro, deja de mostrarse y se conserva su consumo anterior | `hu09` CA2 (×2); `hu10` HU09 CA2 |
+| CA3 | dio de baja a un usuario | ese usuario intenta ingresar | no entra y su grupo familiar queda inactivo | `hu09` CA3 |
+| CA4 | cambió un empleado a administrador | ese usuario vuelve | ve las opciones de administrador | `hu09` CA4 |
+| CA5 | un usuario olvidó su contraseña | el administrador la restablece | contraseña temporal y cambio en el siguiente ingreso | `hu09` CA5; `web` HU09 |
+| CA6 | hay un solo administrador activo | se intenta dar de baja o cambiar su tipo | no se permite | `hu09` CA6 (×3) |
+
+### HU10 – Generar reporte mensual · 8 pts
+
+**Como** usuario administrador **quiero** generar al final del mes un reporte de todos los usuarios empleados con el detalle de cada persona **para que** se envíe a planilla.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | 12 pensionados propios, 10 de un familiar y 3 no pensionados de otro | genera el reporte | 12 × 15 = 180, 10 × 15 = 150, 3 × 18 = 54; total 384 Bs | `hu10` CA1 |
+| CA2 | un pensionado no avisó ni asistió | se genera | el almuerzo está incluido | `hu10` CA2 |
+| CA3 | el reporte está generado | exporta a Excel o PDF | titular, persona, parentesco, modalidad, cantidad, precio, subtotal y total por titular | `hu10` CA3; `exportadores` |
+| CA4 | hubo días sin menú | se genera | no aparecen como almuerzo ni como falta | `hu10` CA4 |
+| CA5 | un empleado no consumió | se genera | figura con 0 Bs | `hu10` CA5; `exportadores` CA5 |
+
+### HU11 – Consultar mi consumo del mes · 3 pts
+
+**Como** usuario empleado **quiero** consultar los almuerzos y el monto del mes, propios y de cada familiar, **para que** conozca lo que se me descontará.
+
+| CA | Dado que | Cuando | Entonces | Prueba |
+| --- | --- | --- | --- | --- |
+| CA1 | 4 almuerzos no pensionados | consulta | 4 almuerzos y 72 Bs | `hu11` CA1 |
+| CA2 | un pensionado a su cargo tiene 11 programados | consulta | puede avisar una inasistencia más | `hu11` CA2 |
+| CA3 | consumo propio y de familiares | consulta | detalle por persona y total | `hu11` CA3 (×2) |
+| CA4 | hubo días sin menú | consulta | «Sin atención – no se cobra» | `hu11` CA4 (×2) |
+
+## 4. Estimación con Planning Poker
+
+Referencia: HU02 Iniciar sesión = 3 puntos. Cada integrante vota a la vez (1, 2, 3, 5, 8, 13); si los votos difieren en más de un valor, el más alto y el más bajo explican y se vuelve a votar.
+
+| Historia | Comparación con la referencia | Pts |
+| --- | --- | --- |
+| HU02 | Referencia | 3 |
+| HU01 | Mayor: registro de usuario y familiares con varias validaciones | 5 |
+| HU03 | Similar: formulario por día y reglas de publicación | 3 |
+| HU04 | Mayor: varias personas, tope, hora límite y menú | 5 |
+| HU05 | Similar: cancelación por persona con hora límite | 3 |
+| HU06 | Menor: solo consulta | 2 |
+| HU07 | Mayor que HU04: pensión por persona y confirmación con el menú | 8 |
+| HU08 | Similar a HU04: mínimo por persona y hora límite | 5 |
+| HU09 | Similar: modificación y baja sobre registros existentes | 3 |
+| HU10 | Similar a HU07: cálculo por persona, agrupado, dos formatos | 8 |
+| HU11 | Similar: consulta con detalle por persona | 3 |
+
+> La evidencia de la votación (foto o acta) va en [entregas.md](entregas.md). Si una estimación cambió en la reunión, se corrige aquí y en el tablero.
+
+## 5. Revisión INVEST
+
+✓* = tiene una dependencia declarada; se desarrolla y prueba sola una vez hecha esa dependencia, por eso está en un sprint igual o posterior.
 
 | Historia | I | N | V | E | S | T |
 | --- | --- | --- | --- | --- | --- | --- |
-| HU01 Iniciar sesión | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU02 Reservar mi almuerzo | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU03 Cancelar mi reserva | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU04 Ver almuerzos del día | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU05 Ver mis familiares | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU06 Reservar para un familiar | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU07 Registrar feriados | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU08 Pensionarme | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU09 Pensionar a un familiar | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU10 Avisar inasistencia | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU11 Reporte mensual | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
-| HU12 Ver mi consumo | ✔* | ✔ | ✔ | ✔ | ✔ | ✔ |
+| HU01 Registrar usuario y grupo familiar | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU02 Iniciar sesión | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU03 Publicar el menú semanal | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU04 Reservar almuerzo | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU05 Cancelar reserva | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU06 Ver almuerzos del día | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU07 Pensionar | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU08 Avisar inasistencia | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU09 Modificar o dar de baja | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU10 Generar reporte mensual | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
+| HU11 Consultar mi consumo | ✓* | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-### Historias descartadas o reescritas (lo que no cumple INVEST)
+La T se comprueba en el repositorio: cada criterio tiene su prueba automática (columna **Prueba**).
 
-| Historia mal planteada | Rompe | Cómo se corrigió |
+### Historias que no cumplían INVEST y su corrección
+
+| Historia mal planteada | Incumple | Corrección |
 | --- | --- | --- |
-| «Como desarrollador, quiero consumir la API del sistema empresarial.» | V | Es una tarea técnica sin valor visible para el usuario: se incluyó como tareas dentro de HU01 (login) y HU05 (familiares). |
-| «Como empleado, quiero gestionar las reservas y pensiones de toda mi familia.» | S, E | Demasiado grande para un sprint: se partió por función en HU05, HU06, HU09 y HU10 (ver, reservar, pensionar, avisar). |
-| «Como empleado, quiero reservar 5 almuerzos para mi familia.» | T | No se puede verificar el mínimo de cada pensionado si la reserva no tiene nombre: se reemplazó por la reserva nominal de HU06. |
-| «Como familiar, quiero ingresar al sistema para reservar mi almuerzo.» | V | Contradice R9 (los familiares no tienen acceso): se descartó; el titular reserva por ellos. |
-| «Login» partido en «pantalla de login» y «servicio de autenticación». | V | Partir por capa técnica no entrega valor: HU01 se implementa completa, de punta a punta. |
-| «Como encargado, quiero que el sistema calcule el cobro de forma justa.» | T | Se reemplazó por HU11, con montos verificables (15 Bs / 18 Bs por persona y total por titular). |
-
-## 7. Control de cambios del backlog (v1 → v2)
-
-Motivo del cambio: nuevos requisitos del Product Owner (familiares de primer grado, reserva nominal y login con la API del sistema empresarial).
-
-| Versión 1 | Versión 2 | Qué cambió |
-| --- | --- | --- |
-| HU01 Ingresar con mis datos de empleado | HU01 Iniciar sesión con usuario del sistema empresarial | Reescrita: login real contra la API, con criterios de error, caída de la API, expiración y rol. 3 → 5 pts. |
-| HU02 Registro mensual de pensionados | HU08 Pensionarme | Fusionada: describía lo mismo que la HU07 de la v1 (rompía la I de INVEST). |
-| HU03 Reservar almuerzo | HU02 Reservar mi almuerzo | Sin cambio de fondo; la reserva queda a nombre de la persona. |
-| HU04 Cancelar reserva | HU03 Cancelar mi reserva | Sin cambio; se corrigió la dependencia (antes apuntaba a HU02). |
-| HU05 Ver almuerzos del día | HU04 Ver almuerzos del día | La lista muestra tipo (empleado/familiar) y titular. |
-| HU06 Registrar feriados | HU07 Registrar feriados | Sin cambio; aplica a pensionados empleados y familiares. |
-| HU07 Pensionarse | HU08 Pensionarme | Fusionada con la HU02 de la v1. |
-| HU08 Avisar inasistencia | HU10 Avisar inasistencia (por persona) | El mínimo de 10 se controla por persona. |
-| HU09 Reporte mensual | HU11 Reporte por titular | Agrupa por titular con detalle por persona. 5 → 8 pts. |
-| HU10 Ver mi consumo | HU12 Ver mi consumo (y de mi familia) | Detalle por persona. 2 → 3 pts. |
-| — | HU05 Ver mis familiares habilitados | Nueva: lista de familiares desde la API. |
-| — | HU06 Reservar almuerzo para un familiar | Nueva: reserva nominal con tope. |
-| — | HU09 Pensionar a un familiar | Nueva: pensión individual por familiar. |
-
-### Inconsistencias de la versión 1 corregidas
-
-- La HU02 de la v1 se titulaba «Reservar almuerzo» pero describía el registro de pensionados, igual que la HU07. Se fusionaron en la nueva HU08.
-- Varias dependencias apuntaban a historias equivocadas (por ejemplo, «Cancelar reserva» dependía de HU02 y «Avisar inasistencia» de HU06). Se revisaron todas.
-- Los rangos y las sumas del plan de sprints no coincidían con la tabla del backlog. Ahora el ID coincide con el orden de prioridad y cada sprint suma lo que indica.
-- El login no tenía criterios para la integración con la API ni para sus errores. Ahora es una historia completa (HU01) con sus tareas técnicas.
-- El ✔* de la revisión INVEST no estaba explicado. Ahora se aclara su significado.
+| «Como administrador, quiero gestionar todo el sistema.» | S, E | Se dividió en HU01, HU03, HU06, HU09 y HU10. |
+| «Como desarrollador, quiero crear las tablas de usuarios y familiares.» | V | Tarea técnica sin valor visible; es parte de HU01. |
+| «Como familiar, quiero ingresar para reservar.» | V | Contradice R4: el empleado reserva por él (HU04). |
+| «Como empleado, quiero reservar cinco almuerzos para mi familia.» | T | Sin reserva nominal no se verifica el mínimo por persona; se reemplazó por HU04. |
+| «Como administrador, quiero que el cobro sea justo.» | T | No verificable; se reemplazó por HU10 con 15 Bs y 18 Bs por persona. |

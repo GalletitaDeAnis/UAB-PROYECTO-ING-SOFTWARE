@@ -24,7 +24,7 @@ describe("separación de capas (las dependencias apuntan hacia el dominio)", () 
     expect(usadas.every((ruta) => ruta.startsWith("./") || ruta.startsWith("../dominio/"))).toBe(true);
   });
 
-  it("la presentación (GraphQL y pantallas) no abre la base ni la API empresarial", () => {
+  it("la presentación (GraphQL y pantallas) no abre la base ni la infraestructura", () => {
     const usadas = importaciones(fuentes("src/presentacion"));
     expect(usadas.some((ruta) => ruta.includes("prisma") || ruta.includes("infraestructura"))).toBe(false);
   });
