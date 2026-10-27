@@ -2,11 +2,16 @@
   "name": "almuerzos-union-boliviana",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "preparar": "prisma generate && prisma migrate deploy && tsx --env-file=.env prisma/seed.ts",
     "db:migrar": "prisma migrate dev",
     "db:estudio": "prisma studio",
     "dev": "tsx --env-file=.env src/infraestructura/servidor.ts",
+    "build": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
+    "start": "tsx src/infraestructura/servidor.ts",
     "simulador": "tsx --env-file=.env simulador-empresarial/servidor.ts",
     "typecheck": "tsc",
     "test": "vitest run",

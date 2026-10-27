@@ -47,6 +47,16 @@ npm run dev
 
 Si el puerto está ocupado, cambiar `PORT` en el `.env`. Para probar la regla de las 9:00 sin esperar: `RELOJ_FIJO=2026-11-03T08:59` en el `.env`.
 
+### Desplegarlo en Render
+
+El servidor es un proceso Express que queda encendido y se llama a sí mismo para el simulador empresarial, así que va en un servicio web (Render), no en funciones serverless (Vercel, Firebase Functions). La base sigue en Supabase.
+
+1. En [render.com](https://render.com), entrar con GitHub y elegir **New → Blueprint** con este repositorio. Render lee `render.yaml`.
+2. Completar `DATABASE_URL` y `DIRECT_URL` con las mismas URLs de Supabase del `.env` (Transaction pooler y Session pooler).
+3. **Apply**. Cada push a `desarrollo` vuelve a desplegar: `npm run build` aplica migraciones y datos iniciales, y `npm start` levanta el servidor.
+
+Queda en `https://almuerzos-union-boliviana.onrender.com` (o el nombre que asigne Render), con `/graphql` y `/salud`. En el plan gratis el servicio se duerme tras 15 minutos sin uso y la primera visita tarda unos 50 s en despertarlo.
+
 ### Usuarios de prueba
 
 Con `EMPRESARIAL_SIMULADO=true` (valor por defecto del `.env.example`), el servidor trae una API empresarial simulada, porque el equipo no tiene todavía la de TI. La contraseña de todos es **`demo123`**.

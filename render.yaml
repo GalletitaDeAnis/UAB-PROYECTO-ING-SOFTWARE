@@ -1,0 +1,29 @@
+# Blueprint de Render: New > Blueprint > este repositorio.
+# Las variables con sync: false se completan en el panel de Render (no van a Git).
+services:
+  - type: web
+    name: almuerzos-union-boliviana
+    runtime: node
+    plan: free
+    region: oregon            # misma región que la base de Supabase (us-west-2)
+    branch: desarrollo
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /salud
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL       # Supabase, Transaction pooler (6543, ?pgbouncer=true)
+        sync: false
+      - key: DIRECT_URL         # Supabase, Session pooler (5432)
+        sync: false
+      - key: EMPRESARIAL_SIMULADO
+        value: "true"
+      - key: EMPRESARIAL_API_KEY
+        generateValue: true
+      - key: GRAPHIQL           # deja abierta la interfaz de /graphql para probar
+        value: "true"
+      - key: ENCARGADOS
+        value: UB-200
+      - key: CORS_ORIGENES      # URL del frontend, si se despliega aparte
+        value: ""
