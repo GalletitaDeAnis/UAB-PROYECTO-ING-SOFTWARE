@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { leerConfiguracion } from "../src/infraestructura/configuracion.js";
+import { CifradorScrypt } from "../src/infraestructura/contrasenas.js";
 import { momentoEnLaPaz } from "../src/infraestructura/relojLaPaz.js";
 import { RelojDelSistema } from "../src/infraestructura/relojSistema.js";
 import { TokensAleatorios } from "../src/infraestructura/tokens.js";
@@ -53,34 +54,61 @@ describe("tokens de sesión", () => {
   });
 });
 
-describe("configuración", () => {
-  const base = { DATABASE_URL: "postgresql://x", EMPRESARIAL_API_KEY: "k" };
+describe("contraseñas", () => {
+  it("scrypt: verifica la correcta, rechaza otra y dos hashes de la misma contraseña difieren", async () => {
+    const cifrador = new CifradorScrypt();
 
-  it("con el simulador, la URL de la API apunta al mismo servidor", () => {
-    const config = leerConfiguracion({ ...base, EMPRESARIAL_SIMULADO: "true", PORT: "3010" });
+    const a = await cifrador.cifrar("Demo2026");
+    const b = await cifrador.cifrar("Demo2026");
 
-    expect(config.empresarialUrl).toBe("http://localhost:3010/simulador-empresarial");
-    expect(config.graphiql).toBe(true);
+    expect(a).toMatch(/^scrypt\$[^$]+\$[^$]+$/);
+    expect(a).not.toContain("Demo2026");
+    expect(a).not.toBe(b);
+    expect(await cifrador.verificar("Demo2026", a)).toBe(true);
+    expect(await cifrador.verificar("demo2026", a)).toBe(false);
+    expect(await cifrador.verificar("Demo2026", "texto-plano")).toBe(false);
   });
 
-  it("sin simulador exige la URL real y quita la barra final; lee los orígenes de CORS", () => {
+  it("la temporal tiene 10 caracteres con letras y números, y cambia cada vez", () => {
+    const cifrador = new CifradorScrypt();
+    const temporales = Array.from({ length: 20 }, () => cifrador.temporal());
+
+    for (const temporal of temporales) {
+      expect(temporal).toHaveLength(10);
+      expect(temporal).toMatch(/[A-Za-z]/);
+      expect(temporal).toMatch(/\d/);
+      expect(temporal).not.toMatch(/[0O1l]/);
+    }
+    expect(new Set(temporales).size).toBe(20);
+  });
+});
+
+describe("configuración", () => {
+  it("lee el puerto, los orígenes de CORS, GraphiQL y la demo", () => {
     const config = leerConfiguracion({
-      ...base,
-      EMPRESARIAL_API_URL: "https://api.ejemplo/v1/",
+      DATABASE_URL: "postgresql://x",
+      PORT: "3010",
       CORS_ORIGENES: "http://a.com, http://b.com,",
-      NODE_ENV: "production",
+      SEMBRAR_DEMO: "true",
     });
 
-    expect(config.empresarialUrl).toBe("https://api.ejemplo/v1");
-    expect(config.origenesPermitidos).toEqual(["http://a.com", "http://b.com"]);
-    expect(config.graphiql).toBe(false);
-    expect(config.produccion).toBe(true);
-    expect(leerConfiguracion({ ...base, EMPRESARIAL_API_URL: "u", GRAPHIQL: "true", NODE_ENV: "production" }).graphiql).toBe(true);
+    expect(config).toEqual({
+      puerto: 3010,
+      origenesPermitidos: ["http://a.com", "http://b.com"],
+      graphiql: true,
+      produccion: false,
+      cuentasDemo: true,
+    });
   });
 
-  it("una variable obligatoria que falta corta el arranque con su nombre", () => {
-    expect(() => leerConfiguracion({ EMPRESARIAL_API_KEY: "k" })).toThrow("DATABASE_URL");
-    expect(() => leerConfiguracion({ DATABASE_URL: "x", EMPRESARIAL_API_URL: "u" })).toThrow("EMPRESARIAL_API_KEY");
-    expect(() => leerConfiguracion(base)).toThrow("EMPRESARIAL_API_URL");
+  it("en producción GraphiQL se apaga salvo que se pida", () => {
+    const base = { DATABASE_URL: "x", NODE_ENV: "production" };
+
+    expect(leerConfiguracion(base)).toMatchObject({ graphiql: false, produccion: true, cuentasDemo: false, puerto: 3000 });
+    expect(leerConfiguracion({ ...base, GRAPHIQL: "true" }).graphiql).toBe(true);
+  });
+
+  it("sin DATABASE_URL el arranque se corta con su nombre", () => {
+    expect(() => leerConfiguracion({})).toThrow("DATABASE_URL");
   });
 });

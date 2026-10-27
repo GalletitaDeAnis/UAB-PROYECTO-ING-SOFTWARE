@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
+import { PARENTESCOS } from "../dominio/modelo.js";
 import type { ExportadorReporte } from "../dominio/puertos.js";
 import type { DescuentoTitular, LineaDescuento } from "../dominio/reporte.js";
 
@@ -13,14 +14,14 @@ function periodo(anio: number, mes: number): string {
 }
 
 function modalidad(linea: LineaDescuento): string {
-  return linea.modalidad === "PENSION" ? "Pensionado" : "No pensionado";
+  return linea.modalidad === "PENSIONADO" ? "Pensionado" : "No pensionado";
 }
 
 function parentesco(linea: LineaDescuento): string {
-  return linea.tipo === "EMPLEADO" ? "Titular" : (linea.parentesco ?? "Familiar");
+  return linea.tipo === "EMPLEADO" ? "Titular" : linea.parentesco ? PARENTESCOS[linea.parentesco] : "Familiar";
 }
 
-/** HU11 CA3: titular, persona, parentesco, modalidad, cantidad, precio, subtotal y total por titular. */
+/** HU10 CA3: titular, persona, parentesco, modalidad, cantidad, precio, subtotal y total por titular. */
 export class ExportadorExcel implements ExportadorReporte {
   readonly formato = "EXCEL" as const;
   readonly extension = "xlsx";
@@ -40,9 +41,13 @@ export class ExportadorExcel implements ExportadorReporte {
     encabezado.font = { bold: true };
 
     for (const titular of descuentos) {
+      // HU10 CA5: quien no consumió figura igual, con 0 Bs.
+      if (titular.lineas.length === 0) {
+        hoja.addRow([titular.codigoEmpleado, titular.nombreTitular, "Sin consumo en el mes", "", "", 0, null, 0, 0]);
+      }
       titular.lineas.forEach((linea, indice) => {
         hoja.addRow([
-          titular.codigoTitular,
+          titular.codigoEmpleado,
           titular.nombreTitular,
           linea.nombreCompleto,
           parentesco(linea),
@@ -81,12 +86,13 @@ export class ExportadorPdf implements ExportadorReporte {
       doc.moveDown();
 
       if (descuentos.length === 0) {
-        doc.text("No hay consumos para este periodo.");
+        doc.text("No hay usuarios empleados ni consumos para este periodo.");
       }
       for (const titular of descuentos) {
         if (doc.y > 720) doc.addPage();
-        doc.fontSize(12).font("Helvetica-Bold").text(`${titular.nombreTitular} (${titular.codigoTitular})`);
+        doc.fontSize(12).font("Helvetica-Bold").text(`${titular.nombreTitular} (${titular.codigoEmpleado})`);
         doc.font("Helvetica").fontSize(10);
+        if (titular.lineas.length === 0) doc.text("Sin consumo en el mes.", { indent: 14 });
         for (const linea of titular.lineas) {
           doc.text(
             `${linea.nombreCompleto} · ${parentesco(linea)} · ${modalidad(linea)} · ` +

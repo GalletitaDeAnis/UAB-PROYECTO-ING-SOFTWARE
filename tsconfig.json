@@ -9,5 +9,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "prisma", "simulador-empresarial"]
+  "include": ["src", "tests", "prisma"]
 }

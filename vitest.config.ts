@@ -15,9 +15,9 @@ export default defineConfig({
     env: entorno,
     coverage: {
       provider: "v8",
-      include: ["src/**/*.ts", "simulador-empresarial/**/*.ts"],
+      include: ["src/**/*.ts"],
       // Arranques del proceso: solo leen el entorno y escuchan un puerto. Se prueban al levantar la app.
-      exclude: ["src/infraestructura/servidor.ts", "simulador-empresarial/servidor.ts", ...sinBase],
+      exclude: ["src/infraestructura/servidor.ts", ...sinBase],
       reporter: ["text", "html", "json-summary"],
       reportsDirectory: "cobertura",
       thresholds: { lines: 80, branches: 75, functions: 80 },

@@ -1,30 +1,29 @@
 import { PrismaClient } from "@prisma/client";
 import { crearCasosDeUso } from "../aplicacion/casosDeUso.js";
-import type { Configuracion } from "./configuracion.js";
+import { CifradorScrypt } from "./contrasenas.js";
 import { ExportadorExcel, ExportadorPdf } from "./exportadores.js";
 import { RelojDelSistema } from "./relojSistema.js";
 import {
-  AlmuerzosPrisma,
-  AutorizacionesPrisma,
-  FeriadosPrisma,
+  CuentasPrisma,
+  MenusPrisma,
   PensionesPrisma,
   PersonasPrisma,
+  ReservasPrisma,
   SesionesPrisma,
 } from "./repositoriosPrisma.js";
-import { SistemaEmpresarialHttp } from "./sistemaEmpresarialHttp.js";
 import { TokensAleatorios } from "./tokens.js";
 
 /** Raíz de composición: el único lugar que conoce las clases concretas. */
-export function crearAplicacion(config: Configuracion, db = new PrismaClient()) {
+export function crearAplicacion(db = new PrismaClient()) {
   const casos = crearCasosDeUso({
     reloj: new RelojDelSistema(),
-    empresarial: new SistemaEmpresarialHttp({ urlBase: config.empresarialUrl, apiKey: config.empresarialApiKey }),
     personas: new PersonasPrisma(db),
-    autorizaciones: new AutorizacionesPrisma(db),
-    almuerzos: new AlmuerzosPrisma(db),
-    feriados: new FeriadosPrisma(db),
+    cuentas: new CuentasPrisma(db),
+    reservas: new ReservasPrisma(db),
     pensiones: new PensionesPrisma(db),
+    menus: new MenusPrisma(db),
     sesiones: new SesionesPrisma(db),
+    cifrador: new CifradorScrypt(),
     tokens: new TokensAleatorios(),
     exportadores: [new ExportadorExcel(), new ExportadorPdf()],
   });

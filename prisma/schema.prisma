@@ -1,5 +1,5 @@
 // Base del restaurante en PostgreSQL (local o Supabase).
-// Empleados y familiares no se dan de alta aquí: se copian de la API empresarial al iniciar sesión (R1b).
+// El administrador registra a los usuarios y a sus familiares (HU01); nada se borra, la baja es un estado.
 // El detalle de cada decisión está en entregables/base-de-datos.md.
 
 generator client {
@@ -12,9 +12,9 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum Rol {
+enum TipoUsuario {
+  ADMINISTRADOR
   EMPLEADO
-  ENCARGADO
 }
 
 enum TipoPersona {
@@ -22,93 +22,134 @@ enum TipoPersona {
   FAMILIAR
 }
 
-enum OrigenAlmuerzo {
-  ESPORADICO
-  PENSION
+enum Parentesco {
+  CONYUGE
+  HIJO
+  HIJA
+  PADRE
+  MADRE
 }
 
-enum EstadoAlmuerzo {
-  CONFIRMADO
-  CANCELADO
+enum Modalidad {
+  NO_PENSIONADO
+  PENSIONADO
+}
+
+enum EstadoReserva {
+  CONFIRMADA
+  CANCELADA
   INASISTENCIA_AVISADA
 }
 
-/// Copia mínima de quien consume: el empleado (su propio titular) o un familiar de primer grado.
+/// Quien consume: un usuario (su propio titular) o un familiar de primer grado a su cargo (R4).
 model Persona {
-  id             String      @id
-  tipo           TipoPersona
-  nombreCompleto String      @map("nombre_completo")
-  parentesco     String?
-  codigoTitular  String      @map("codigo_titular")
-  vigente        Boolean
-  actualizadaEn  DateTime    @updatedAt @map("actualizada_en") @db.Timestamptz(3)
+  id              String       @id @default(uuid()) @db.Uuid
+  tipo            TipoPersona
+  nombres         String
+  apellidos       String
+  ci              String       @unique
+  fechaNacimiento DateTime     @map("fecha_nacimiento") @db.Date
+  telefono        String
+  parentesco      Parentesco?
+  titularId       String       @map("titular_id") @db.Uuid
+  activo          Boolean      @default(true)
+  creadaEn        DateTime     @default(now()) @map("creada_en") @db.Timestamptz(3)
+  actualizadaEn   DateTime     @updatedAt @map("actualizada_en") @db.Timestamptz(3)
 
-  titular   Persona    @relation("Titular", fields: [codigoTitular], references: [id])
-  aCargo    Persona[]  @relation("Titular")
-  almuerzos Almuerzo[] @relation("Consume")
-  pensiones Pension[]  @relation("Pensionado")
+  titular    Persona   @relation("Titular", fields: [titularId], references: [id])
+  aCargo     Persona[] @relation("Titular")
+  cuenta     Cuenta?
+  reservas   Reserva[] @relation("Consume")
+  aDescontar Reserva[] @relation("Descuento")
+  pensiones  Pension[]
 
-  @@index([codigoTitular])
+  @@index([titularId])
   @@map("persona")
 }
 
-/// Rol de encargado. La API empresarial no lo entrega (S4), así que se configura aquí.
-model Autorizacion {
-  codigoEmpleado String @id @map("codigo_empleado")
-  rol            Rol
+/// Credenciales del usuario (R5). La contraseña solo como hash scrypt con sal.
+model Cuenta {
+  personaId             String      @id @map("persona_id") @db.Uuid
+  codigoEmpleado        String      @unique @map("codigo_empleado")
+  nombreUsuario         String      @unique @map("nombre_usuario")
+  contrasenaHash        String      @map("contrasena_hash")
+  tipo                  TipoUsuario
+  debeCambiarContrasena Boolean     @default(true) @map("debe_cambiar_contrasena")
 
-  @@map("autorizacion")
+  persona  Persona  @relation(fields: [personaId], references: [id])
+  sesiones Sesion[]
+
+  @@map("cuenta")
 }
 
-/// Un almuerzo por persona y por día (R2). Guarda el titular para el descuento por planilla (R8).
-model Almuerzo {
-  personaId     String         @map("persona_id")
-  fecha         DateTime       @db.Date
-  codigoTitular String         @map("codigo_titular")
-  origen        OrigenAlmuerzo
-  precioBs      Int            @map("precio_bs")
-  estado        EstadoAlmuerzo
-  creadoEn      DateTime       @default(now()) @map("creado_en") @db.Timestamptz(3)
-  actualizadoEn DateTime       @updatedAt @map("actualizado_en") @db.Timestamptz(3)
+/// R6: una fila por semana publicada. Publicada no se modifica.
+model MenuSemanal {
+  lunes       DateTime  @id @db.Date
+  publicadoEl DateTime  @map("publicado_el") @db.Date
+  dias        MenuDia[]
+
+  @@map("menu_semanal")
+}
+
+/// R7: solo estos días tienen atención. Una reserva sin día de menú no puede existir (llave foránea).
+model MenuDia {
+  fecha       DateTime @id @db.Date
+  lunes       DateTime @db.Date
+  descripcion String
+
+  semana   MenuSemanal @relation(fields: [lunes], references: [lunes])
+  reservas Reserva[]
+
+  @@index([lunes])
+  @@map("menu_dia")
+}
+
+/// Un almuerzo por persona y por día (R8, R15). Guarda el titular para el descuento (R16).
+model Reserva {
+  personaId     String        @map("persona_id") @db.Uuid
+  fecha         DateTime      @db.Date
+  titularId     String        @map("titular_id") @db.Uuid
+  modalidad     Modalidad
+  precioBs      Int           @map("precio_bs")
+  estado        EstadoReserva
+  creadaEn      DateTime      @default(now()) @map("creada_en") @db.Timestamptz(3)
+  actualizadaEn DateTime      @updatedAt @map("actualizada_en") @db.Timestamptz(3)
 
   persona Persona @relation("Consume", fields: [personaId], references: [id])
+  titular Persona @relation("Descuento", fields: [titularId], references: [id])
+  dia     MenuDia @relation(fields: [fecha], references: [fecha])
 
   @@id([personaId, fecha])
   @@index([fecha, estado])
-  @@index([codigoTitular, fecha])
-  @@map("almuerzo")
+  @@index([titularId, fecha])
+  @@map("reserva")
 }
 
-/// Pensión nominal de un mes (R3). Sus almuerzos se crean en la misma transacción (R4).
+/// Pensión nominal de un mes (R10). Sus reservas se crean con el menú de cada semana.
 model Pension {
-  personaId     String   @map("persona_id")
-  anio          Int
-  mes           Int
-  codigoTitular String   @map("codigo_titular")
-  solicitadaEl  DateTime @map("solicitada_el") @db.Date
+  personaId    String   @map("persona_id") @db.Uuid
+  anio         Int
+  mes          Int
+  titularId    String   @map("titular_id") @db.Uuid
+  solicitadaEl DateTime @map("solicitada_el") @db.Date
 
-  persona Persona @relation("Pensionado", fields: [personaId], references: [id])
+  persona Persona @relation(fields: [personaId], references: [id])
 
   @@id([personaId, anio, mes])
-  @@index([codigoTitular, anio, mes])
+  @@index([anio, mes])
+  @@index([titularId, anio, mes])
   @@map("pension")
 }
 
-model Feriado {
-  fecha       DateTime @id @db.Date
-  descripcion String
-
-  @@map("feriado")
-}
-
-/// Sesión propia del restaurante (HU01 CA5). Se guarda el hash del token, nunca el token.
+/// Sesión propia (HU02 CA7). Se guarda el hash del token, nunca el token.
 model Sesion {
   tokenHash       String   @id @map("token_hash")
-  codigoEmpleado  String   @map("codigo_empleado")
-  rol             Rol
+  personaId       String   @map("persona_id") @db.Uuid
   creadaEn        DateTime @default(now()) @map("creada_en") @db.Timestamptz(3)
   ultimaActividad DateTime @map("ultima_actividad") @db.Timestamptz(3)
 
-  @@index([codigoEmpleado])
+  cuenta Cuenta @relation(fields: [personaId], references: [personaId], onDelete: Cascade)
+
+  @@index([personaId])
   @@map("sesion")
 }

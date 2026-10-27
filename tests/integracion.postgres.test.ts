@@ -2,24 +2,18 @@ import { execSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { crearCasosDeUso } from "../src/aplicacion/casosDeUso.js";
-import { personaDelEmpleado, personaDelFamiliar } from "../src/dominio/modelo.js";
+import type { Usuario } from "../src/dominio/modelo.js";
+import { CifradorScrypt } from "../src/infraestructura/contrasenas.js";
 import {
-  AlmuerzosPrisma,
-  AutorizacionesPrisma,
-  FeriadosPrisma,
+  CuentasPrisma,
+  MenusPrisma,
   PensionesPrisma,
   PersonasPrisma,
+  ReservasPrisma,
   SesionesPrisma,
 } from "../src/infraestructura/repositoriosPrisma.js";
 import { TokensAleatorios } from "../src/infraestructura/tokens.js";
-import {
-  cuentasIniciales,
-  EmpresarialEnMemoria,
-  ExportadorDePrueba,
-  familiaPedro,
-  pedro,
-  relojEn,
-} from "./fakes.js";
+import { ExportadorDePrueba, relojEn, type RelojDePrueba } from "./fakes.js";
 
 /**
  * Repositorios Prisma contra un PostgreSQL de verdad (local o Supabase).
@@ -27,142 +21,148 @@ import {
  */
 const url = process.env.DATABASE_URL_PRUEBAS;
 
-describe.runIf(url)("PostgreSQL: repositorios, restricciones y RLS", () => {
+describe.runIf(url)("PostgreSQL: repositorios, transacciones y restricciones", () => {
   const db = new PrismaClient({ datasourceUrl: url });
+  const reloj = relojEn("2026-10-18", 18, 0);
 
   beforeAll(() => {
-    execSync("npx prisma migrate deploy", {
-      env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
-      stdio: "pipe",
-    });
+    execSync("npx prisma migrate deploy", { env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url }, stdio: "pipe" });
   }, 120_000);
 
   beforeAll(async () => {
     await db.$executeRawUnsafe(
-      'TRUNCATE "sesion", "almuerzo", "pension", "feriado", "autorizacion", "persona" RESTART IDENTITY CASCADE',
+      'TRUNCATE "sesion", "reserva", "pension", "menu_dia", "menu_semanal", "cuenta", "persona" CASCADE',
     );
-    await db.autorizacion.create({ data: { codigoEmpleado: "UB-200", rol: "ENCARGADO" } });
   });
 
   afterAll(async () => {
     await db.$disconnect();
   });
 
-  function casos(reloj = relojEn("2026-09-25", 10, 0)) {
+  function casos(r: RelojDePrueba = reloj) {
     return crearCasosDeUso({
-      reloj,
-      empresarial: new EmpresarialEnMemoria(cuentasIniciales()),
+      reloj: r,
       personas: new PersonasPrisma(db),
-      autorizaciones: new AutorizacionesPrisma(db),
-      almuerzos: new AlmuerzosPrisma(db),
-      feriados: new FeriadosPrisma(db),
+      cuentas: new CuentasPrisma(db),
+      reservas: new ReservasPrisma(db),
       pensiones: new PensionesPrisma(db),
+      menus: new MenusPrisma(db),
       sesiones: new SesionesPrisma(db),
+      cifrador: new CifradorScrypt(),
       tokens: new TokensAleatorios(),
       exportadores: [new ExportadorDePrueba("EXCEL")],
     });
   }
 
-  it("el inicio de sesión copia empleado y familiares y guarda solo el hash del token", async () => {
-    const resultado = await casos().iniciarSesion.ejecutar("pflores", "demo123");
-
-    expect(resultado.ok).toBe(true);
-    if (!resultado.ok) return;
-    expect(await db.persona.count({ where: { codigoTitular: "UB-103" } })).toBe(5);
-    const sesion = await db.sesion.findFirstOrThrow({ where: { codigoEmpleado: "UB-103" } });
-    expect(sesion.tokenHash).not.toBe(resultado.valor.token);
-    expect((await casos().validarSesion.ejecutar(resultado.valor.token)).ok).toBe(true);
+  const datos = (nombres: string, ci: string) => ({
+    nombres,
+    apellidos: "Prueba",
+    ci,
+    fechaNacimiento: "1990-01-01",
+    telefono: "70000000",
   });
 
-  it("sincronizar deja no vigente a quien ya no viene de la API", async () => {
-    const personas = new PersonasPrisma(db);
-    await personas.sincronizar(
-      personaDelEmpleado(pedro),
-      familiaPedro.slice(0, 3).map((f) => personaDelFamiliar("UB-103", f)),
-    );
+  let admin: Usuario;
+  let empleado: Usuario;
+  let familiarId = "";
 
-    expect((await personas.familiaresVigentes("UB-103")).map((p) => p.id)).toEqual(["FAM-2003", "FAM-2002", "FAM-2001"]);
-    expect(await personas.obtener("FAM-2004")).toMatchObject({ vigente: false });
-    await personas.sincronizar(personaDelEmpleado(pedro), familiaPedro.map((f) => personaDelFamiliar("UB-103", f)));
-  });
-
-  it("pensión, feriado, reserva, aviso, lista, consumo y reporte sobre Postgres", async () => {
+  it("HU01 registra persona, cuenta y familiar en una transacción; el CI no se repite", async () => {
     const c = casos();
-    const usuario = { codigoInstitucional: "UB-103", rol: "EMPLEADO" as const };
-    const encargada = { codigoInstitucional: "UB-200", rol: "ENCARGADO" as const };
+    const raiz = await new CuentasPrisma(db).registrar(
+      datos("Raíz", "1000001"),
+      { codigoEmpleado: "ADM-1", nombreUsuario: "raiz", contrasenaHash: await new CifradorScrypt().cifrar("Raiz2026"), tipo: "ADMINISTRADOR" },
+      [],
+    );
+    admin = { id: raiz.persona.id, nombreUsuario: "raiz", tipo: "ADMINISTRADOR", debeCambiarContrasena: false };
 
-    expect((await c.registrarFeriado.ejecutar(encargada, "2026-10-08", "Feriado de prueba")).ok).toBe(true);
-    const pension = await c.pensionar.ejecutar(usuario, ["UB-103", "FAM-2002"], 2026, 10);
-    expect(pension.ok && pension.valor.map((r) => r.diasConfirmados)).toEqual([16, 16]);
-    expect(await db.almuerzo.count({ where: { codigoTitular: "UB-103" } })).toBe(32);
+    const registro = await c.registrarUsuario.ejecutar(admin, {
+      datos: datos("Pedro", "2000001"),
+      codigoEmpleado: "UB-1",
+      nombreUsuario: "pedro",
+      contrasenaInicial: "Inicio2026",
+      tipo: "EMPLEADO",
+      familiares: [{ ...datos("María", "2000002"), parentesco: "CONYUGE" }],
+    });
 
-    const enOctubre = casos(relojEn("2026-10-06", 8, 0));
-    expect((await enOctubre.reservar.ejecutar(usuario, "FAM-2001", "2026-10-06")).ok).toBe(true);
-    expect((await enOctubre.reservar.ejecutar(usuario, "FAM-2001", "2026-10-06")).ok).toBe(false);
-    expect((await enOctubre.cancelar.ejecutar(usuario, "FAM-2001", "2026-10-06")).ok).toBe(true);
-    expect((await enOctubre.reservar.ejecutar(usuario, "FAM-2003", "2026-10-07")).ok).toBe(true);
-    const aviso = await enOctubre.avisarInasistencia.ejecutar(usuario, "FAM-2002", "2026-10-06");
-    expect(aviso.ok && aviso.valor.almuerzosRestantes).toBe(15);
-
-    const lista = await enOctubre.verLista.ejecutar(encargada, "2026-10-06");
-    expect(lista.ok && lista.valor.filas.map((f) => f.nombre)).toEqual(["Pedro Flores"]);
-
-    const consumo = await enOctubre.verMiConsumo.ejecutar(usuario, 2026, 10);
-    expect(consumo.ok && consumo.valor.totalBs).toBe(16 * 15 + 15 * 15 + 18);
-
-    const reporte = await enOctubre.generarReporte.ejecutar(encargada, 2026, 10);
-    expect(reporte.ok && reporte.valor.titulares[0]).toMatchObject({ codigoTitular: "UB-103", totalBs: 483 });
-    expect((await enOctubre.listarFeriados.ejecutar(2026, 10)).ok).toBe(true);
-    const mias = await enOctubre.verMisAlmuerzos.ejecutar(usuario, 2026, 10);
-    expect(mias.ok && mias.valor).toHaveLength(34);
+    expect(registro.ok).toBe(true);
+    if (!registro.ok) return;
+    familiarId = registro.valor.familiares[0].id;
+    empleado = { id: registro.valor.persona.id, nombreUsuario: "pedro", tipo: "EMPLEADO", debeCambiarContrasena: false };
+    expect(registro.valor.persona.titularId).toBe(registro.valor.persona.id);
+    expect((await c.registrarUsuario.ejecutar(admin, { ...registro.valor, datos: datos("Otro", "2000002"), codigoEmpleado: "UB-2", nombreUsuario: "otro", contrasenaInicial: "Inicio2026", tipo: "EMPLEADO", familiares: [] })).ok).toBe(false);
+    await expect(db.persona.create({ data: { ...datos("Dup", "2000001"), fechaNacimiento: new Date(), tipo: "FAMILIAR", titularId: empleado.id, parentesco: "HIJO" } })).rejects.toThrow();
   });
 
-  it("la base rechaza un precio que no corresponde, un viernes o una pensión del mes 13", async () => {
-    await expect(
-      db.almuerzo.create({
-        data: { personaId: "UB-103", fecha: new Date("2026-10-20T00:00:00Z"), codigoTitular: "UB-103", origen: "ESPORADICO", precioBs: 5, estado: "CONFIRMADO" },
-      }),
-    ).rejects.toThrow();
-    await expect(
-      db.almuerzo.create({
-        data: { personaId: "UB-103", fecha: new Date("2026-10-09T00:00:00Z"), codigoTitular: "UB-103", origen: "ESPORADICO", precioBs: 18, estado: "CONFIRMADO" },
-      }),
-    ).rejects.toThrow();
-    await expect(
-      db.pension.create({
-        data: { personaId: "UB-103", anio: 2026, mes: 13, codigoTitular: "UB-103", solicitadaEl: new Date() },
-      }),
-    ).rejects.toThrow();
+  it("HU02 la contraseña queda como scrypt y el ingreso la verifica", async () => {
+    const c = casos();
+    const cuenta = await db.cuenta.findUniqueOrThrow({ where: { nombreUsuario: "pedro" } });
+
+    expect(cuenta.contrasenaHash).toMatch(/^scrypt\$/);
+    const sesion = await c.iniciarSesion.ejecutar("pedro", "Inicio2026");
+    expect(sesion.ok && sesion.valor.usuario.debeCambiarContrasena).toBe(true);
+    if (!sesion.ok) return;
+    expect((await c.validarSesion.ejecutar(sesion.valor.token)).ok).toBe(true);
   });
 
-  it("una pensión duplicada no deja almuerzos sueltos (transacción)", async () => {
-    const pensiones = new PensionesPrisma(db);
-    const antes = await db.almuerzo.count();
+  it("HU07 + HU03 la pensión y la publicación del menú crean las reservas en la misma transacción", async () => {
+    const octubre = casos(relojEn("2026-10-20", 10, 0));
+    const pension = await octubre.pensionar.ejecutar(empleado, [familiarId], 2026, 11);
+    expect(pension.ok && pension.valor[0].ok).toBe(true);
 
-    await expect(
-      pensiones.registrar(
-        { personaId: "UB-103", codigoTitular: "UB-103", anio: 2026, mes: 10, solicitadaEl: "2026-09-25" },
-        [{ personaId: "UB-103", codigoTitular: "UB-103", fecha: "2026-10-29", origen: "PENSION", precioBs: 15, estado: "CONFIRMADO" }],
-      ),
-    ).rejects.toThrow();
-    expect(await db.almuerzo.count()).toBe(antes);
+    const noviembre = casos(relojEn("2026-11-01", 18, 0));
+    const publicado = await noviembre.publicarMenu.ejecutar(admin, "2026-11-02", [
+      { fecha: "2026-11-02", descripcion: "Sopa" },
+      { fecha: "2026-11-04", descripcion: "Silpancho" },
+    ]);
+
+    expect(publicado.ok && publicado.valor.reservasDePension).toBe(2);
+    const reservas = await db.reserva.findMany({ where: { personaId: familiarId }, orderBy: { fecha: "asc" } });
+    expect(reservas.map((r) => [r.fecha.toISOString().slice(0, 10), r.modalidad, r.precioBs])).toEqual([
+      ["2026-11-02", "PENSIONADO", 15],
+      ["2026-11-04", "PENSIONADO", 15],
+    ]);
+    expect((await noviembre.publicarMenu.ejecutar(admin, "2026-11-02", [{ fecha: "2026-11-03", descripcion: "x" }])).ok).toBe(false);
   });
 
-  it("todas las tablas tienen RLS activo (la API de datos de Supabase no las expone)", async () => {
+  it("HU04 reserva no pensionada; HU06 la lista del día la muestra junto al pensionado", async () => {
+    const c = casos(relojEn("2026-11-02", 8, 0));
+
+    const reserva = await c.reservar.ejecutar(empleado, [empleado.id], "2026-11-02");
+    const lista = await c.verLista.ejecutar(admin, "2026-11-02");
+
+    expect(reserva.ok && reserva.valor[0].ok).toBe(true);
+    expect(lista.ok && lista.valor.filas.map((f) => [f.nombre, f.modalidad])).toEqual([
+      ["María Prueba", "PENSIONADO"],
+      ["Pedro Prueba", "NO_PENSIONADO"],
+    ]);
+  });
+
+  it("la base rechaza reservas sin día de menú y precios incoherentes, aunque se inserten a mano", async () => {
+    const base = { personaId: empleado.id, titularId: empleado.id, modalidad: "NO_PENSIONADO" as const, estado: "CONFIRMADA" as const };
+
+    await expect(db.reserva.create({ data: { ...base, fecha: new Date("2026-11-03T00:00:00Z"), precioBs: 18 } })).rejects.toThrow();
+    await expect(db.reserva.create({ data: { ...base, fecha: new Date("2026-11-04T00:00:00Z"), precioBs: 15 } })).rejects.toThrow();
+  });
+
+  it("HU09 la baja anula reservas futuras en la misma transacción y HU10 conserva lo consumido", async () => {
+    const c = casos(relojEn("2026-11-03", 10, 0));
+
+    const baja = await c.darDeBaja.ejecutar(admin, familiarId);
+    const reservas = await db.reserva.findMany({ where: { personaId: familiarId }, orderBy: { fecha: "asc" } });
+    const reporte = await c.generarReporte.ejecutar(admin, 2026, 11);
+
+    expect(baja.ok).toBe(true);
+    expect(reservas.map((r) => r.estado)).toEqual(["CONFIRMADA", "CANCELADA"]);
+    const pedro = reporte.ok ? reporte.valor.titulares.find((t) => t.titularId === empleado.id) : undefined;
+    expect(pedro?.totalBs).toBe(18 + 15);
+  });
+
+  it("RLS está activo en todas las tablas: la API de datos de Supabase no lee nada", async () => {
     const tablas = await db.$queryRaw<{ relname: string; relrowsecurity: boolean }[]>`
-      SELECT c.relname, c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname <> '_prisma_migrations'`;
+      SELECT relname, relrowsecurity FROM pg_class
+      WHERE relname IN ('persona','cuenta','menu_semanal','menu_dia','reserva','pension','sesion')`;
 
-    expect(tablas.length).toBe(6);
+    expect(tablas).toHaveLength(7);
     expect(tablas.every((t) => t.relrowsecurity)).toBe(true);
-  });
-
-  it("cerrar y vencer sesiones las borra", async () => {
-    const sesiones = new SesionesPrisma(db);
-    await sesiones.guardar({ tokenHash: "h-prueba", codigoInstitucional: "UB-103", rol: "EMPLEADO", ultimaActividad: 1_000 });
-    await sesiones.tocar("h-prueba", 2_000);
-    expect((await sesiones.obtener("h-prueba"))?.ultimaActividad).toBe(2_000);
-    await sesiones.eliminar("h-prueba");
-    expect(await sesiones.obtener("h-prueba")).toBeNull();
   });
 });
