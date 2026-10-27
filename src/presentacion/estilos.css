@@ -172,12 +172,15 @@ ul.menu { list-style: none; padding: 0; margin: 0; }
 ul.menu li { padding: 8px 0; border-bottom: 1px solid var(--linea); display: flex; flex-direction: column; }
 ul.menu li:last-child { border-bottom: 0; }
 ul.menu li.pasado { opacity: 0.55; }
-ul.menu .dia { font-size: 13px; font-weight: 600; color: var(--tenue); text-transform: capitalize; }
+ul.menu .dia { font-size: 13px; font-weight: 600; color: var(--tenue); }
 
 .pasos { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 0 14px; }
-.pasos strong { text-transform: capitalize; }
+.pasos strong { font-size: 16px; }
 
 .lista-simple { margin: 0; padding-left: 18px; }
+
+.tarjeta a:not(.enlace) { color: var(--azul); font-weight: 600; text-decoration: none; }
+.tarjeta a:not(.enlace):hover { text-decoration: underline; }
 
 /* --- Tablas ------------------------------------------------------------------------- */
 
