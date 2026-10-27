@@ -1,11 +1,13 @@
 import type {
-  Almuerzo,
-  Empleado,
-  Familiar,
-  Feriado,
+  Cuenta,
+  DatosPersonales,
+  MenuDia,
+  MenuSemanal,
+  Parentesco,
   Pension,
   Persona,
-  Rol,
+  Reserva,
+  TipoUsuario,
 } from "./modelo.js";
 import type { DescuentoTitular } from "./reporte.js";
 import type { Momento } from "./tiempo.js";
@@ -29,66 +31,72 @@ export interface Reloj {
   instante(): number;
 }
 
-/** Respuesta de la API empresarial al validar usuario y contraseña. */
-export type Autenticacion = { valida: true; codigoInstitucional: string } | { valida: false };
+export type NuevoFamiliar = DatosPersonales & { parentesco: Parentesco };
 
-/** La API no respondió a tiempo o devolvió un error. HU01 CA4: no hay ingreso sin conexión. */
-export class SistemaEmpresarialNoDisponible extends Error {
-  constructor(causa?: string) {
-    super(causa ? `Sistema empresarial no disponible: ${causa}` : "Sistema empresarial no disponible");
-    this.name = "SistemaEmpresarialNoDisponible";
-  }
-}
+export type NuevaCuenta = {
+  codigoEmpleado: string;
+  nombreUsuario: string;
+  contrasenaHash: string;
+  tipo: TipoUsuario;
+};
 
-/**
- * La API del sistema empresarial, solo lectura (R1b, R12).
- * Cada método lanza SistemaEmpresarialNoDisponible si la llamada falla o pasa de 5 segundos.
- */
-export interface SistemaEmpresarial {
-  autenticar(usuario: string, contrasena: string): Promise<Autenticacion>;
-  obtenerEmpleado(codigo: string): Promise<Empleado | null>;
-  obtenerFamiliares(codigo: string): Promise<Familiar[]>;
-}
-
-export interface AutorizacionRepositorio {
-  obtenerRol(codigoEmpleado: string): Promise<Rol | null>;
-}
-
-/** Copia local de empleados y familiares, actualizada en cada inicio de sesión. */
+/** Personas que consumen: usuarios y familiares. Nada se borra; la baja deja `activo = false`. */
 export interface PersonaRepositorio {
   obtener(id: string): Promise<Persona | null>;
   obtenerVarias(ids: string[]): Promise<Persona[]>;
-  /** Guarda al empleado y deja vigentes solo los familiares que llegaron de la API. */
-  sincronizar(empleado: Persona, familiares: Persona[]): Promise<void>;
-  familiaresVigentes(codigoTitular: string): Promise<Persona[]>;
+  buscarPorCi(ci: string): Promise<Persona | null>;
+  /** Activos e inactivos, para la gestión del administrador. */
+  familiares(titularId: string): Promise<Persona[]>;
+  familiaresActivos(titularId: string): Promise<Persona[]>;
+  agregarFamiliar(titularId: string, familiar: NuevoFamiliar): Promise<Persona>;
+  actualizar(persona: Persona): Promise<void>;
+  /**
+   * HU09 CA2 y CA3: deja inactivas a esas personas y anula, en la misma transacción,
+   * sus reservas confirmadas desde `anularDesde` (incluida). Lo anterior se conserva.
+   */
+  darDeBaja(personaIds: string[], anularDesde: string): Promise<void>;
 }
 
-export interface AlmuerzoRepositorio {
-  obtener(personaId: string, fecha: string): Promise<Almuerzo | null>;
-  guardar(almuerzo: Almuerzo): Promise<void>;
-  listarDelTitular(codigoTitular: string, anio: number, mes: number): Promise<Almuerzo[]>;
-  listarDeLaPersona(personaId: string, anio: number, mes: number): Promise<Almuerzo[]>;
-  listarConfirmados(fecha: string): Promise<Almuerzo[]>;
-  listarDelMes(anio: number, mes: number): Promise<Almuerzo[]>;
+export type UsuarioRegistrado = { persona: Persona; cuenta: Cuenta; familiares: Persona[] };
+
+/** Cuentas de acceso. Registrar crea la persona, la cuenta y los familiares juntos: o todo o nada. */
+export interface CuentaRepositorio {
+  obtener(personaId: string): Promise<Cuenta | null>;
+  buscarPorNombreUsuario(nombreUsuario: string): Promise<Cuenta | null>;
+  buscarPorCodigo(codigoEmpleado: string): Promise<Cuenta | null>;
+  listar(): Promise<Cuenta[]>;
+  registrar(datos: DatosPersonales, cuenta: NuevaCuenta, familiares: NuevoFamiliar[]): Promise<UsuarioRegistrado>;
+  actualizar(cuenta: Cuenta): Promise<void>;
 }
 
-export interface FeriadoRepositorio {
-  esFeriado(fecha: string): Promise<boolean>;
-  listar(anio: number, mes: number): Promise<Feriado[]>;
-  guardar(feriado: Feriado): Promise<void>;
+export interface ReservaRepositorio {
+  obtener(personaId: string, fecha: string): Promise<Reserva | null>;
+  guardar(reserva: Reserva): Promise<void>;
+  listarDelTitular(titularId: string, anio: number, mes: number): Promise<Reserva[]>;
+  listarDeLaPersona(personaId: string, anio: number, mes: number): Promise<Reserva[]>;
+  listarConfirmadas(fecha: string): Promise<Reserva[]>;
+  listarDelMes(anio: number, mes: number): Promise<Reserva[]>;
 }
 
 export interface PensionRepositorio {
   obtener(personaId: string, anio: number, mes: number): Promise<Pension | null>;
-  listarDelTitular(codigoTitular: string, anio: number, mes: number): Promise<Pension[]>;
-  /** Guarda la pensión y sus almuerzos del mes juntos: o quedan los dos o ninguno. */
-  registrar(pension: Pension, almuerzos: Almuerzo[]): Promise<void>;
+  listarDelTitular(titularId: string, anio: number, mes: number): Promise<Pension[]>;
+  listarDelMes(anio: number, mes: number): Promise<Pension[]>;
+  /** Guarda la pensión y sus reservas de los días con menú ya publicado: o quedan las dos o ninguna. */
+  registrar(pension: Pension, reservas: Reserva[]): Promise<void>;
+}
+
+export interface MenuRepositorio {
+  obtenerSemana(lunes: string): Promise<MenuSemanal | null>;
+  obtenerDia(fecha: string): Promise<MenuDia | null>;
+  diasDelMes(anio: number, mes: number): Promise<MenuDia[]>;
+  /** HU07 CA2: el menú y las reservas de los pensionados se guardan en la misma transacción. */
+  publicar(menu: MenuSemanal, reservasDePension: Reserva[]): Promise<void>;
 }
 
 export type SesionGuardada = {
   tokenHash: string;
-  codigoInstitucional: string;
-  rol: Rol;
+  personaId: string;
   ultimaActividad: number;
 };
 
@@ -97,11 +105,12 @@ export interface SesionRepositorio {
   obtener(tokenHash: string): Promise<SesionGuardada | null>;
   tocar(tokenHash: string, instante: number): Promise<void>;
   eliminar(tokenHash: string): Promise<void>;
+  eliminarDeLaPersona(personaId: string): Promise<void>;
 }
 
 export type FormatoReporte = "EXCEL" | "PDF";
 
-/** HU11 CA3, CU12: Excel y PDF son dos implementaciones del mismo puerto. El cálculo no sabe cuál llegó. */
+/** HU10 CA3: Excel y PDF son dos implementaciones del mismo puerto. El cálculo no sabe cuál llegó. */
 export interface ExportadorReporte {
   readonly formato: FormatoReporte;
   readonly extension: string;
@@ -113,4 +122,11 @@ export interface ExportadorReporte {
 export interface GeneradorDeTokens {
   nuevo(): string;
   hash(token: string): string;
+}
+
+/** La contraseña se guarda solo como hash con sal. La temporal se muestra una vez al administrador. */
+export interface CifradorDeContrasenas {
+  cifrar(contrasena: string): Promise<string>;
+  verificar(contrasena: string, hash: string): Promise<boolean>;
+  temporal(): string;
 }

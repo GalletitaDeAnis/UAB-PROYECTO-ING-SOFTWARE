@@ -1,74 +1,82 @@
 import {
   cuentaParaCobro,
-  MINIMO_ALMUERZOS_PENSION,
-  type Almuerzo,
-  type OrigenAlmuerzo,
+  nombreCompleto,
+  type Modalidad,
+  type Parentesco,
   type Persona,
+  type Reserva,
+  type TipoPersona,
 } from "./modelo.js";
 
 /** Una fila del descuento: una persona, una modalidad. Se calcula, no se guarda. */
 export type LineaDescuento = {
   personaId: string;
   nombreCompleto: string;
-  tipo: Persona["tipo"];
-  parentesco: string | null;
-  modalidad: OrigenAlmuerzo;
+  tipo: TipoPersona;
+  parentesco: Parentesco | null;
+  modalidad: Modalidad;
   cantidad: number;
   precioUnitarioBs: number;
   subtotalBs: number;
 };
 
 export type DescuentoTitular = {
-  codigoTitular: string;
+  titularId: string;
   nombreTitular: string;
+  codigoEmpleado: string;
   lineas: LineaDescuento[];
   totalBs: number;
 };
 
-function personaDesconocida(id: string, codigoTitular: string): Persona {
-  return { id, tipo: "FAMILIAR", nombreCompleto: id, parentesco: null, codigoTitular, vigente: false };
-}
+export type Titular = { persona: Persona; codigoEmpleado: string };
 
 /**
- * R7, R7b, R8: agrupa por titular lo que se cobra. Lo confirmado se cobra aunque la persona
- * no haya ido; lo cancelado, lo avisado y los feriados no. Un titular sin consumo no aparece.
+ * R13, R16, R17: agrupa por titular lo que se cobra. Lo confirmado se cobra aunque la persona
+ * no haya ido; lo cancelado y lo avisado no. Cada titular de la lista aparece aunque no haya
+ * consumido (HU10 CA5); quien tenga consumo sin estar en la lista también aparece.
  */
 export function calcularDescuentos(
-  almuerzos: Almuerzo[],
+  reservas: Reserva[],
   personas: Map<string, Persona>,
-  esFeriado: (fecha: string) => boolean,
+  titulares: Titular[],
 ): DescuentoTitular[] {
   const porTitular = new Map<string, Map<string, LineaDescuento>>();
+  const codigos = new Map<string, string>();
+  for (const titular of titulares) {
+    porTitular.set(titular.persona.id, new Map());
+    codigos.set(titular.persona.id, titular.codigoEmpleado);
+  }
 
-  for (const almuerzo of almuerzos) {
-    if (!cuentaParaCobro(almuerzo, esFeriado)) continue;
-    const persona =
-      personas.get(almuerzo.personaId) ?? personaDesconocida(almuerzo.personaId, almuerzo.codigoTitular);
-    const lineas = porTitular.get(almuerzo.codigoTitular) ?? new Map<string, LineaDescuento>();
-    porTitular.set(almuerzo.codigoTitular, lineas);
+  for (const reserva of reservas) {
+    if (!cuentaParaCobro(reserva)) continue;
+    const persona = personas.get(reserva.personaId);
+    const lineas = porTitular.get(reserva.titularId) ?? new Map<string, LineaDescuento>();
+    porTitular.set(reserva.titularId, lineas);
 
-    const clave = `${almuerzo.personaId}|${almuerzo.origen}|${almuerzo.precioBs}`;
+    const clave = `${reserva.personaId}|${reserva.modalidad}|${reserva.precioBs}`;
     const linea = lineas.get(clave) ?? {
-      personaId: persona.id,
-      nombreCompleto: persona.nombreCompleto,
-      tipo: persona.tipo,
-      parentesco: persona.parentesco,
-      modalidad: almuerzo.origen,
+      personaId: reserva.personaId,
+      nombreCompleto: persona ? nombreCompleto(persona) : reserva.personaId,
+      tipo: persona?.tipo ?? "FAMILIAR",
+      parentesco: persona?.parentesco ?? null,
+      modalidad: reserva.modalidad,
       cantidad: 0,
-      precioUnitarioBs: almuerzo.precioBs,
+      precioUnitarioBs: reserva.precioBs,
       subtotalBs: 0,
     };
     linea.cantidad += 1;
-    linea.subtotalBs += almuerzo.precioBs;
+    linea.subtotalBs += reserva.precioBs;
     lineas.set(clave, linea);
   }
 
   const resultado: DescuentoTitular[] = [];
-  for (const [codigoTitular, lineas] of porTitular) {
+  for (const [titularId, lineas] of porTitular) {
     const ordenadas = [...lineas.values()].sort(ordenPersonas);
+    const titular = personas.get(titularId);
     resultado.push({
-      codigoTitular,
-      nombreTitular: personas.get(codigoTitular)?.nombreCompleto ?? codigoTitular,
+      titularId,
+      nombreTitular: titular ? nombreCompleto(titular) : titularId,
+      codigoEmpleado: codigos.get(titularId) ?? "",
       lineas: ordenadas,
       totalBs: ordenadas.reduce((suma, linea) => suma + linea.subtotalBs, 0),
     });
@@ -76,13 +84,8 @@ export function calcularDescuentos(
   return resultado.sort((a, b) => a.nombreTitular.localeCompare(b.nombreTitular, "es"));
 }
 
-/** El titular primero y después sus familiares por nombre. */
+/** El titular primero, después sus familiares por nombre; pensionado antes que no pensionado. */
 function ordenPersonas(a: LineaDescuento, b: LineaDescuento): number {
   if (a.tipo !== b.tipo) return a.tipo === "EMPLEADO" ? -1 : 1;
-  return a.nombreCompleto.localeCompare(b.nombreCompleto, "es");
-}
-
-/** R5, R6: cuántos avisos le quedan a un pensionado sin bajar del mínimo de 10. */
-export function inasistenciasDisponibles(almuerzosQueCuentan: number): number {
-  return Math.max(0, almuerzosQueCuentan - MINIMO_ALMUERZOS_PENSION);
+  return a.nombreCompleto.localeCompare(b.nombreCompleto, "es") || b.modalidad.localeCompare(a.modalidad);
 }

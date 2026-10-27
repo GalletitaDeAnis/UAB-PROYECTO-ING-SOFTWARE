@@ -32,7 +32,9 @@ export function esLunesAJueves(fecha: string): boolean {
   return dia >= 1 && dia <= 4;
 }
 
-/** A las 9:00 en punto el cambio ya no se acepta. Un día futuro sigue abierto. */
+export const HORA_LIMITE = "09:00";
+
+/** R9: a las 9:00 en punto el cambio ya no se acepta. Un día futuro sigue abierto. */
 export function admiteCambio(ahora: Momento, fechaServicio: string): boolean {
   if (ahora.fecha < fechaServicio) return true;
   if (ahora.fecha > fechaServicio) return false;
@@ -52,7 +54,7 @@ export function mesSiguiente(fecha: string): { anio: number; mes: number } {
   return mes === 12 ? { anio: anio + 1, mes: 1 } : { anio, mes: mes + 1 };
 }
 
-/** R3 y HU08: la pensión se pide para el mes siguiente; el día 1 de ese mes ya es tarde. */
+/** R10 y HU07 CA4: la pensión se pide antes de que empiece el mes; el día 1 ya es tarde. */
 export function esMesSiguiente(ahora: Momento, anio: number, mes: number): boolean {
   const siguiente = mesSiguiente(ahora.fecha);
   return siguiente.anio === anio && siguiente.mes === mes;
@@ -64,24 +66,22 @@ export function diasDelMes(anio: number, mes: number): string[] {
   return Array.from({ length: total }, (_, i) => `${prefijo}-${String(i + 1).padStart(2, "0")}`);
 }
 
-/** R4: lunes a jueves del mes, sin feriados. */
-export function diasDeServicio(
-  anio: number,
-  mes: number,
-  esFeriado: (fecha: string) => boolean,
-): string[] {
-  return diasDelMes(anio, mes).filter((fecha) => esLunesAJueves(fecha) && !esFeriado(fecha));
+/** El lunes de la semana a la que pertenece la fecha. */
+export function lunesDe(fecha: string): string {
+  const dia = diaSemana(fecha);
+  return sumarDias(fecha, dia === 0 ? -6 : 1 - dia);
 }
 
-export function sugerirFechaReserva(
-  ahora: Momento,
-  esFeriado: (fecha: string) => boolean,
-): string {
+/** R6: los cuatro días en que puede haber atención en la semana que empieza ese lunes. */
+export function lunesAJuevesDe(lunes: string): string[] {
+  return [0, 1, 2, 3].map((dias) => sumarDias(lunes, dias));
+}
+
+/** El próximo día con menú en que todavía se puede reservar, para precargar el formulario. */
+export function sugerirFechaReserva(ahora: Momento, tieneMenu: (fecha: string) => boolean): string {
   let fecha = ahora.fecha;
   for (let i = 0; i < 21; i++) {
-    if (esLunesAJueves(fecha) && !esFeriado(fecha) && admiteCambio(ahora, fecha)) {
-      return fecha;
-    }
+    if (tieneMenu(fecha) && admiteCambio(ahora, fecha)) return fecha;
     fecha = sumarDias(fecha, 1);
   }
   return ahora.fecha;
