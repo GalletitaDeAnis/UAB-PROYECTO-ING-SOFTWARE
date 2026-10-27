@@ -37,6 +37,8 @@ Contraseña de todos: **`Demo2026`**.
 | Retros (5) | [plantilla-retro.md](entregables/plantilla-retro.md) |
 | Git e IA (12) | Historial de `desarrollo` y [declaracion-uso-de-ia.md](entregables/declaracion-uso-de-ia.md) |
 
+Versiones en Word (con carátula) de toda la documentación: [entregables/word/](entregables/word/); se regeneran con `python entregables/word/generar_word.py`.
+
 Observaciones sobre los documentos del equipo: [revision-documentos-final.md](entregables/revision-documentos-final.md).
 
 ## Cómo levantarlo en local

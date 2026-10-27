@@ -15,7 +15,7 @@ La rúbrica pide tres entregas (sesiones 6, 10 y 13) y el Demo Day (sesiones 14 
 
 Estos artefactos dependen de reuniones reales. No se completan en el repositorio sin que hayan pasado:
 
-- [ ] Foto o acta del **Planning Poker** (votos de cada integrante por historia).
+- [ ] Foto y acta del **Planning Poker** (votos de cada integrante por historia): plantilla en [acta-planning-poker.md](acta-planning-poker.md).
 - [ ] **Actas de Retro 1 y Retro 2** con un hallazgo medible, un acuerdo y el cambio que produjo en el backlog ([plantilla-retro.md](plantilla-retro.md)).
 - [ ] **Tablero** (Trello u otro) con las historias por sprint.
 - [ ] **Revisión de otro integrante** del corte del backlog final en GitHub (Definition of Done, punto 8).
