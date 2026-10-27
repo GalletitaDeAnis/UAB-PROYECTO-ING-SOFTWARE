@@ -4,6 +4,8 @@ Restaurante de la Unión Boliviana. Proyecto final de Ingeniería de Software, C
 
 La rama que hay que abrir es **`desarrollo`**. Ahí está el trabajo del equipo. `main` es la rama central y solo recibe un corte cuando el equipo lo acepta.
 
+**Desplegado en:** <https://almuerzos-union-boliviana.onrender.com> (API en [/graphql](https://almuerzos-union-boliviana.onrender.com/graphql)). Usuarios de prueba más abajo, contraseña `demo123`. Si estuvo sin uso, la primera visita tarda unos 50 s.
+
 ## Para el docente
 
 El restaurante sirve almuerzos de lunes a jueves a funcionarios y a sus familiares de primer grado. Hoy las reservas van por WhatsApp. El sistema permite reservar, pensionar y cancelar por persona, aplica 18 Bs (uso esporádico) o 15 Bs (pensión) y deja el reporte por empleado titular para el descuento por planilla. El ingreso usa el usuario del sistema empresarial de la institución, a través de su API. No da de alta empleados, no cobra en línea, no publica el menú, no manda push y no se conecta solo con planilla.
@@ -55,7 +57,7 @@ El servidor es un proceso Express que queda encendido y se llama a sí mismo par
 2. Completar `DATABASE_URL` y `DIRECT_URL` con las mismas URLs de Supabase del `.env` (Transaction pooler y Session pooler).
 3. **Apply**. Cada push a `desarrollo` vuelve a desplegar: `npm run build` aplica migraciones y datos iniciales, y `npm start` levanta el servidor.
 
-Queda en `https://almuerzos-union-boliviana.onrender.com` (o el nombre que asigne Render), con `/graphql` y `/salud`. En el plan gratis el servicio se duerme tras 15 minutos sin uso y la primera visita tarda unos 50 s en despertarlo.
+Está en <https://almuerzos-union-boliviana.onrender.com>, con `/graphql` y `/salud`. En el plan gratis el servicio se duerme tras 15 minutos sin uso y la primera visita tarda unos 50 s en despertarlo.
 
 ### Usuarios de prueba
 
