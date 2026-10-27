@@ -1,11 +1,13 @@
 // createGraphQLError usa la misma clase GraphQLError que Yoga reconoce al enmascarar errores.
 import { createGraphQLError } from "graphql-yoga";
 import type { CasosDeUso } from "../../aplicacion/casosDeUso.js";
-import { SOLO_ENCARGADO } from "../../aplicacion/comun.js";
+import { CAMBIO_PENDIENTE, SOLO_ADMINISTRADOR, SOLO_EMPLEADO, type ResultadoPorPersona } from "../../aplicacion/comun.js";
+import type { FichaUsuario } from "../../aplicacion/gestionarUsuarios.js";
+import type { SolicitudRegistro } from "../../aplicacion/registrarUsuario.js";
 import { INACTIVIDAD_MAXIMA_MS, SIN_SESION } from "../../aplicacion/sesion.js";
-import { topeDiario, type Almuerzo, type Usuario } from "../../dominio/modelo.js";
+import { nombreCompleto, type DatosPersonales, type MenuDia, type Persona, type Usuario } from "../../dominio/modelo.js";
 import type { Resultado } from "../../dominio/puertos.js";
-import { mesSiguiente, sugerirFechaReserva } from "../../dominio/tiempo.js";
+import { HORA_LIMITE, lunesDe } from "../../dominio/tiempo.js";
 
 export type Contexto = {
   casos: CasosDeUso;
@@ -17,6 +19,7 @@ export type Contexto = {
 
 type Mes = { anio: number; mes: number };
 type DePersona = { fecha: string; personaId?: string | null };
+type FamiliarInput = DatosPersonales & { parentesco: string };
 
 /** Sin sesión válida no se responde nada salvo `hoy` e `iniciarSesion`. */
 function requerirUsuario(ctx: Contexto): Usuario {
@@ -26,10 +29,16 @@ function requerirUsuario(ctx: Contexto): Usuario {
   return ctx.usuario;
 }
 
+const PROHIBIDOS = [SOLO_ADMINISTRADOR, SOLO_EMPLEADO];
+
 /** En las consultas, una regla que no se cumple es un error con código; el mensaje se puede mostrar tal cual. */
 function valorDe<T>(resultado: Resultado<T>): T {
   if (resultado.ok) return resultado.valor;
-  const code = resultado.mensaje === SOLO_ENCARGADO ? "FORBIDDEN" : "BAD_USER_INPUT";
+  const code = resultado.mensaje === CAMBIO_PENDIENTE
+    ? "PASSWORD_CHANGE_REQUIRED"
+    : PROHIBIDOS.includes(resultado.mensaje)
+      ? "FORBIDDEN"
+      : "BAD_USER_INPUT";
   throw createGraphQLError(resultado.mensaje, { extensions: { code } });
 }
 
@@ -39,48 +48,48 @@ function payload<T, P extends object>(resultado: Resultado<T>, armar: (valor: T)
   return { ok: true, mensaje: null, ...armar(resultado.valor) };
 }
 
-function almuerzoGraphql(almuerzo: Almuerzo & { nombrePersona?: string }) {
-  return { ...almuerzo, modalidad: almuerzo.origen, nombrePersona: almuerzo.nombrePersona ?? null };
+function variasPersonas(resultado: Resultado<ResultadoPorPersona[]>) {
+  if (!resultado.ok) return { ok: false, mensaje: resultado.mensaje, resultados: [] };
+  const todas = resultado.valor.every((r) => r.ok);
+  return {
+    ok: todas,
+    mensaje: todas ? null : "Una o más personas no se pudieron registrar. Mira el detalle.",
+    resultados: resultado.valor,
+  };
+}
+
+function ficha(f: FichaUsuario) {
+  return { ...f, cuenta: { ...f.cuenta } };
 }
 
 export const resolvers = {
+  Persona: {
+    nombreCompleto: (persona: Persona) => nombreCompleto(persona),
+  },
+
   Query: {
-    hoy: async (_: unknown, __: unknown, ctx: Contexto) => {
+    hoy: (_: unknown, __: unknown, ctx: Contexto) => {
       const ahora = ctx.casos.reloj.ahora();
-      const [anio, mes] = ahora.fecha.split("-").map(Number);
-      const siguiente = mesSiguiente(ahora.fecha);
-      const feriados = new Set<string>();
-      for (const periodo of [{ anio, mes }, siguiente]) {
-        const lista = await ctx.casos.listarFeriados.ejecutar(periodo.anio, periodo.mes);
-        if (lista.ok) lista.valor.forEach((feriado) => feriados.add(feriado.fecha));
-      }
-      return {
-        fecha: ahora.fecha,
-        horaLimite: "09:00",
-        fechaSugerida: sugerirFechaReserva(ahora, (fecha) => feriados.has(fecha)),
-      };
+      return { fecha: ahora.fecha, horaLimite: HORA_LIMITE, lunes: lunesDe(ahora.fecha) };
     },
     yo: (_: unknown, __: unknown, ctx: Contexto) => requerirUsuario(ctx),
+    menuSemanal: async (_: unknown, args: { lunes: string }, ctx: Contexto) => {
+      requerirUsuario(ctx);
+      return valorDe(await ctx.casos.verMenuSemanal.ejecutar(args.lunes));
+    },
     miFamilia: async (_: unknown, __: unknown, ctx: Contexto) =>
       valorDe(await ctx.casos.verMiFamilia.ejecutar(requerirUsuario(ctx))),
-    misAlmuerzos: async (_: unknown, args: Mes, ctx: Contexto) =>
-      valorDe(await ctx.casos.verMisAlmuerzos.ejecutar(requerirUsuario(ctx), args.anio, args.mes)).map(
-        almuerzoGraphql,
-      ),
+    misReservas: async (_: unknown, args: Mes, ctx: Contexto) =>
+      valorDe(await ctx.casos.verMisReservas.ejecutar(requerirUsuario(ctx), args.anio, args.mes)),
     miConsumo: async (_: unknown, args: Mes, ctx: Contexto) =>
       valorDe(await ctx.casos.verMiConsumo.ejecutar(requerirUsuario(ctx), args.anio, args.mes)),
-    feriados: async (_: unknown, args: Mes, ctx: Contexto) => {
-      requerirUsuario(ctx);
-      return valorDe(await ctx.casos.listarFeriados.ejecutar(args.anio, args.mes));
-    },
-    diasDeServicio: async (_: unknown, args: Mes, ctx: Contexto) => {
-      requerirUsuario(ctx);
-      return valorDe(await ctx.casos.verDiasDeServicio.ejecutar(args.anio, args.mes));
-    },
+    usuarios: async (_: unknown, __: unknown, ctx: Contexto) =>
+      valorDe(await ctx.casos.listarUsuarios.ejecutar(requerirUsuario(ctx))).map(ficha),
+    usuario: async (_: unknown, args: { id: string }, ctx: Contexto) =>
+      ficha(valorDe(await ctx.casos.verUsuario.ejecutar(requerirUsuario(ctx), args.id))),
     listaDelDia: async (_: unknown, args: { fecha?: string | null }, ctx: Contexto) => {
       const usuario = requerirUsuario(ctx);
-      const fecha = args.fecha || ctx.casos.reloj.ahora().fecha;
-      return valorDe(await ctx.casos.verLista.ejecutar(usuario, fecha));
+      return valorDe(await ctx.casos.verLista.ejecutar(usuario, args.fecha || ctx.casos.reloj.ahora().fecha));
     },
     reporteMensual: async (_: unknown, args: Mes, ctx: Contexto) => {
       const reporte = valorDe(await ctx.casos.generarReporte.ejecutar(requerirUsuario(ctx), args.anio, args.mes));
@@ -90,64 +99,85 @@ export const resolvers = {
   },
 
   Mutation: {
-    iniciarSesion: async (_: unknown, args: { usuario: string; contrasena: string }, ctx: Contexto) => {
-      const resultado = await ctx.casos.iniciarSesion.ejecutar(args.usuario, args.contrasena);
-      return {
-        minutosDeInactividad: INACTIVIDAD_MAXIMA_MS / 60000,
-        ...payload(resultado, (sesion) => ({
-          token: sesion.token,
-          usuario: sesion.usuario,
-          familia: {
-            titular: sesion.empleado,
-            familiares: sesion.familiares,
-            topeDiario: topeDiario(sesion.familiares.length),
-          },
-        })),
-      };
-    },
+    iniciarSesion: async (_: unknown, args: { usuario: string; contrasena: string }, ctx: Contexto) => ({
+      minutosDeInactividad: INACTIVIDAD_MAXIMA_MS / 60000,
+      ...payload(await ctx.casos.iniciarSesion.ejecutar(args.usuario, args.contrasena), (sesion) => sesion),
+    }),
     cerrarSesion: async (_: unknown, __: unknown, ctx: Contexto) => {
       if (ctx.token) await ctx.casos.cerrarSesion.ejecutar(ctx.token);
       return true;
     },
-    reservarAlmuerzo: async (_: unknown, args: DePersona, ctx: Contexto) => {
+    cambiarContrasena: async (
+      _: unknown,
+      args: { actual: string; nueva: string; confirmacion: string },
+      ctx: Contexto,
+    ) =>
+      payload(
+        await ctx.casos.cambiarContrasena.ejecutar(requerirUsuario(ctx), args.actual, args.nueva, args.confirmacion),
+        (usuario) => ({ usuario }),
+      ),
+    registrarUsuario: async (
+      _: unknown,
+      args: { registro: Omit<SolicitudRegistro, "familiares"> & { familiares?: FamiliarInput[] | null } },
+      ctx: Contexto,
+    ) => {
+      const resultado = await ctx.casos.registrarUsuario.ejecutar(requerirUsuario(ctx), {
+        ...args.registro,
+        familiares: args.registro.familiares ?? [],
+      });
+      return payload(resultado, (registrado) => ({ ficha: ficha(registrado) }));
+    },
+    publicarMenu: async (_: unknown, args: { lunes: string; dias: MenuDia[] }, ctx: Contexto) => {
+      const resultado = await ctx.casos.publicarMenu.ejecutar(requerirUsuario(ctx), args.lunes, args.dias);
+      return payload(resultado, (publicado) => ({
+        reservasDePension: publicado.reservasDePension,
+        menu: {
+          lunes: publicado.menu.lunes,
+          publicado: true,
+          publicadoEl: publicado.menu.publicadoEl,
+          dias: publicado.menu.dias,
+        },
+      }));
+    },
+    reservarAlmuerzo: async (_: unknown, args: { fecha: string; personaIds?: string[] | null }, ctx: Contexto) => {
       const usuario = requerirUsuario(ctx);
-      const personaId = args.personaId ?? usuario.codigoInstitucional;
-      const resultado = await ctx.casos.reservar.ejecutar(usuario, personaId, args.fecha);
-      return payload(resultado, (almuerzo) => ({ almuerzo: almuerzoGraphql(almuerzo) }));
+      const personaIds = args.personaIds?.length ? args.personaIds : [usuario.id];
+      return variasPersonas(await ctx.casos.reservar.ejecutar(usuario, personaIds, args.fecha));
     },
     cancelarReserva: async (_: unknown, args: DePersona, ctx: Contexto) => {
       const usuario = requerirUsuario(ctx);
-      const personaId = args.personaId ?? usuario.codigoInstitucional;
-      const resultado = await ctx.casos.cancelar.ejecutar(usuario, personaId, args.fecha);
-      return payload(resultado, (almuerzo) => ({ almuerzo: almuerzoGraphql(almuerzo) }));
+      const resultado = await ctx.casos.cancelar.ejecutar(usuario, args.personaId ?? usuario.id, args.fecha);
+      return payload(resultado, (reserva) => ({ reserva }));
     },
-    pensionar: async (_: unknown, args: Mes & { personaIds: string[] }, ctx: Contexto) => {
-      const usuario = requerirUsuario(ctx);
-      const resultado = await ctx.casos.pensionar.ejecutar(usuario, args.personaIds, args.anio, args.mes);
-      if (!resultado.ok) return { ok: false, mensaje: resultado.mensaje, resultados: [] };
-      const todas = resultado.valor.every((r) => r.ok);
-      return {
-        ok: todas,
-        mensaje: todas ? null : "Una o más personas no quedaron pensionadas. Mira el detalle.",
-        resultados: resultado.valor,
-      };
-    },
+    pensionar: async (_: unknown, args: Mes & { personaIds: string[] }, ctx: Contexto) =>
+      variasPersonas(await ctx.casos.pensionar.ejecutar(requerirUsuario(ctx), args.personaIds, args.anio, args.mes)),
     avisarInasistencia: async (_: unknown, args: DePersona, ctx: Contexto) => {
       const usuario = requerirUsuario(ctx);
-      const personaId = args.personaId ?? usuario.codigoInstitucional;
-      const resultado = await ctx.casos.avisarInasistencia.ejecutar(usuario, personaId, args.fecha);
-      return payload(resultado, (aviso) => ({
-        almuerzo: almuerzoGraphql(aviso.almuerzo),
-        almuerzosRestantes: aviso.almuerzosRestantes,
-      }));
+      const resultado = await ctx.casos.avisarInasistencia.ejecutar(usuario, args.personaId ?? usuario.id, args.fecha);
+      return payload(resultado, (aviso) => aviso);
     },
-    registrarFeriado: async (_: unknown, args: { fecha: string; descripcion: string }, ctx: Contexto) => {
-      const resultado = await ctx.casos.registrarFeriado.ejecutar(
-        requerirUsuario(ctx),
-        args.fecha,
-        args.descripcion,
-      );
-      return payload(resultado, (feriado) => ({ feriado }));
+    agregarFamiliar: async (_: unknown, args: { titularId: string; familiar: FamiliarInput }, ctx: Contexto) =>
+      payload(await ctx.casos.agregarFamiliar.ejecutar(requerirUsuario(ctx), args.titularId, args.familiar), (persona) => ({
+        persona,
+      })),
+    modificarDatos: async (
+      _: unknown,
+      args: { personaId: string; datos: DatosPersonales; parentesco?: string | null },
+      ctx: Contexto,
+    ) =>
+      payload(
+        await ctx.casos.modificarDatos.ejecutar(requerirUsuario(ctx), args.personaId, args.datos, args.parentesco ?? undefined),
+        (persona) => ({ persona }),
+      ),
+    cambiarTipoUsuario: async (_: unknown, args: { personaId: string; tipo: string }, ctx: Contexto) => {
+      const usuario = requerirUsuario(ctx);
+      const resultado = await ctx.casos.cambiarTipoUsuario.ejecutar(usuario, args.personaId, args.tipo);
+      if (!resultado.ok) return { ok: false, mensaje: resultado.mensaje };
+      return payload(await ctx.casos.verUsuario.ejecutar(usuario, args.personaId), (f) => ({ ficha: ficha(f) }));
     },
+    darDeBaja: async (_: unknown, args: { personaId: string }, ctx: Contexto) =>
+      payload(await ctx.casos.darDeBaja.ejecutar(requerirUsuario(ctx), args.personaId), (baja) => baja),
+    restablecerContrasena: async (_: unknown, args: { personaId: string }, ctx: Contexto) =>
+      payload(await ctx.casos.restablecerContrasena.ejecutar(requerirUsuario(ctx), args.personaId), (r) => r),
   },
 };
